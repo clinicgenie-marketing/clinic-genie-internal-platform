@@ -13,7 +13,8 @@
     "backup": "tsx scripts/backup.ts",
     "restore-test": "tsx scripts/restore-test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed-load": "tsx scripts/seed-load.ts"
   },
   "dependencies": {
     "@clinic-genie/contracts": "*",

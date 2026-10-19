@@ -22,7 +22,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "test:decisions": "node --test tests/*.test.mjs"
+    "test:decisions": "node --test tests/*.test.mjs",
+    "db:seed-load": "npm run seed-load -w @clinic-genie/db"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

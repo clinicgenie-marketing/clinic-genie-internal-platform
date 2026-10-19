@@ -41,6 +41,7 @@ Sign in at `http://localhost:3400/sign-in` with one of the seeded addresses (for
 | `npm run db:backup` | Logical backup to `backups/backup-<timestamp>.json`, recorded in `backup_runs` |
 | `npm run db:restore-test` | Restores the latest backup into an isolated database, verifies counts, relationships and policies, records the result |
 | `npm run db:reset` | Drops and recreates the schema (development only, refuses production names) |
+| `npm run db:seed-load` | Fills a separate database (name must contain `perf`) with tens of thousands of synthetic rows for performance checks; see `docs/PERFORMANCE.md` |
 | `npm run test:decisions` | The earlier CG-01 and DAY-01 decision-record checks (see BUILD_STATUS for why DAY-01 now fails) |
 
 ## Repository layout
