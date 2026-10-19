@@ -24,3 +24,7 @@ Use the source PDF's ticket IDs. Tickets are build units, not a promise of one t
 | CG-18 | Controlled release, live verification and handover | All relevant tickets, CG-17 and G1-G5; sign-off and owner |
 
 CG-17 belongs before final launch even though its identifier follows CG-16. Provider decisions must precede integration work. Add a dedicated migration ticket and revise estimates if the pilot replaces Wix. A missing dependency blocks completion rather than being silently mocked in acceptance evidence.
+
+## CG-01 status
+
+Practice record: [decisions/CG-01-pilot-scope.md](decisions/CG-01-pilot-scope.md). The pilot is synthetic Demo Clinic A, the build is a new website, and live Wix stays unchanged. The decision log is not signed. Unknown clinic owner, URLs, and approvals remain blockers.

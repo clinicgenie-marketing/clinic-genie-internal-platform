@@ -47,3 +47,5 @@ All 21 Markdown files form one specification pack. Start Cursor with the prompt 
 - [18_ACCEPTANCE_TESTS.md](18_ACCEPTANCE_TESTS.md)
 - [19_SEED_DATA_TEST_PLAN.md](19_SEED_DATA_TEST_PLAN.md)
 - [20_DELIVERY_TIMELINE.md](20_DELIVERY_TIMELINE.md)
+
+CG-01 discovery evidence is [decisions/CG-01-pilot-scope.md](decisions/CG-01-pilot-scope.md). It is a practice decision record, not a substitute for the PDF and not a signed launch approval.
