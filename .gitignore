@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.data/
+backups/*.sql
+backups/*.dump
+!backups/.gitkeep
+.DS_Store
+npm-debug.log*
+backups/*.json
+apps/platform/AGENTS.md

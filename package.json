@@ -1,0 +1,31 @@
+{
+  "name": "clinic-genie-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Clinic Genie: internal agency operations platform (clients, action queue, tasks, approvals, SEO, Google Ads, issues, medical review, reports, timeline)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "db:start": "npm run start -w @clinic-genie/db",
+    "db:migrate": "npm run migrate -w @clinic-genie/db",
+    "db:seed": "npm run seed -w @clinic-genie/db",
+    "db:reset": "npm run reset -w @clinic-genie/db",
+    "db:backup": "npm run backup -w @clinic-genie/db",
+    "db:restore-test": "npm run restore-test -w @clinic-genie/db",
+    "dev": "npm run dev -w @clinic-genie/platform",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:decisions": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.0"
+  }
+}

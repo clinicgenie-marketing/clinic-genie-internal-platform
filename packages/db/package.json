@@ -1,0 +1,29 @@
+{
+  "name": "@clinic-genie/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "start": "tsx scripts/start-embedded.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "reset": "tsx scripts/reset.ts",
+    "backup": "tsx scripts/backup.ts",
+    "restore-test": "tsx scripts/restore-test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clinic-genie/contracts": "*",
+    "pg": "^8.13.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0",
+    "embedded-postgres": "18.4.0-beta.17",
+    "tsx": "^4.19.0",
+    "vitest": "^4.0.0"
+  }
+}

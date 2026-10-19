@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/*
+  Clinic Genie design tokens. Brand anchor: pale aqua #DDF7F8 (confirmed). Supporting colours are
+  interface tokens from 15_DESIGN_SYSTEM.md plus semantic status colours. Light mode only.
+*/
+@theme {
+  --font-sans: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+
+  --color-brand-pale: #ddf7f8;
+  --color-brand-pale-strong: #c3eef0;
+  --color-action: #136c72;
+  --color-action-hover: #0f585d;
+  --color-action-soft: #e3f3f4;
+  --color-ink: #173c40;
+  --color-ink-soft: #3f5c61;
+  --color-muted: #5b7479;
+  --color-canvas: #f6fbfc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f7f8;
+  --color-line: #d7e7e9;
+  --color-line-strong: #b9d3d6;
+
+  --color-good: #1f7a4d;
+  --color-good-bg: #e6f4ec;
+  --color-warn: #8a5300;
+  --color-warn-bg: #fdf1dc;
+  --color-bad: #b3261e;
+  --color-bad-bg: #fbe7e5;
+  --color-info: #136c72;
+  --color-info-bg: #ddf7f8;
+  --color-neutral: #4e6368;
+  --color-neutral-bg: #eef3f4;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 1px 2px rgba(23, 60, 64, 0.05), 0 1px 1px rgba(23, 60, 64, 0.03);
+  --shadow-pop: 0 8px 24px rgba(23, 60, 64, 0.12);
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--color-action);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
