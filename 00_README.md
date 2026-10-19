@@ -49,3 +49,5 @@ All 21 Markdown files form one specification pack. Start Cursor with the prompt 
 - [20_DELIVERY_TIMELINE.md](20_DELIVERY_TIMELINE.md)
 
 CG-01 discovery evidence is [decisions/CG-01-pilot-scope.md](decisions/CG-01-pilot-scope.md). It is a practice decision record, not a substitute for the PDF and not a signed launch approval.
+
+DAY-01 evidence is [decisions/DAY-01-scope-audit.md](decisions/DAY-01-scope-audit.md). It freezes that pilot scope, audits this repository, and records provider access as unconfirmed. The security reviewer is not booked.

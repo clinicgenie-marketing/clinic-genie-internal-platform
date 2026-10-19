@@ -28,3 +28,7 @@ CG-17 belongs before final launch even though its identifier follows CG-16. Prov
 ## CG-01 status
 
 Practice record: [decisions/CG-01-pilot-scope.md](decisions/CG-01-pilot-scope.md). The pilot is synthetic Demo Clinic A, the build is a new website, and live Wix stays unchanged. The decision log is not signed. Unknown clinic owner, URLs, and approvals remain blockers.
+
+## CG-02 status
+
+DAY-01 records the branch rules and the staging approach in [decisions/DAY-01-scope-audit.md](decisions/DAY-01-scope-audit.md). No staging URL, host, or recovery environment exists yet. Provider access is not confirmed, and the independent security reviewer is not booked.
