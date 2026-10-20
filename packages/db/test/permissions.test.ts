@@ -71,6 +71,33 @@ describe("client isolation through row-level security (A-04, A-05, A-06)", () =>
     expect(updated).toBe(0);
   });
 
+  it("two specialists see only their own client websites", async () => {
+    const specA = await staffByEmail("specialist-a@example.invalid");
+    const specB = await staffByEmail("specialist-b@example.invalid");
+    const sites = async (user: Awaited<ReturnType<typeof staffByEmail>>) =>
+      asContext(staffCtx(user), async (db) => (await db.query<{ slug: string }>("select c.slug from websites w join clients c on c.id = w.client_id order by c.slug")).rows.map((r) => r.slug));
+    expect(await sites(specA)).toEqual(["harbourview-dental", "meridian-skin", "meridian-skin"]);
+    expect(await sites(specB)).toEqual(["northgate-physio"]);
+  });
+
+  it("a specialist cannot add a website, even for a client they belong to", async () => {
+    const specB = await staffByEmail("specialist-b@example.invalid");
+    const northgate = await clientBySlug("northgate-physio");
+    await expect(
+      asContext(staffCtx(specB), (db) => db.query("insert into websites (client_id, name, platform) values ($1, 'Cross-role site', 'unknown')", [northgate])),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("staff and anonymous contexts cannot read sign-in sessions", async () => {
+    const specA = await staffByEmail("specialist-a@example.invalid");
+    const staff = await asContext(staffCtx(specA), async (db) => (await db.query("select count(*)::int as n from sessions")).rows[0].n);
+    const anon = await asContext({ kind: "public" }, async (db) => (await db.query("select count(*)::int as n from sessions")).rows[0].n);
+    const links = await asContext(staffCtx(specA), async (db) => (await db.query("select count(*)::int as n from dev_magic_links")).rows[0].n);
+    expect(staff).toBe(0);
+    expect(anon).toBe(0);
+    expect(links).toBe(0);
+  });
+
   it("an anonymous (public) context sees no client data at all", async () => {
     const counts = await asContext({ kind: "public" }, async (db) => ({
       clients: (await db.query("select count(*)::int as n from clients")).rows[0].n,
