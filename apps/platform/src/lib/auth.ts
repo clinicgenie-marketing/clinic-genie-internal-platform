@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import type { Provider } from "next-auth/providers";
 import Google from "next-auth/providers/google";
 import PostgresAdapter from "@auth/pg-adapter";
-import { SERVICE, envFlag, getActiveStaffByEmail, getPool, recordAudit, recordMagicLink, withContext } from "@clinic-genie/db";
+import { SERVICE, authAdapterClient, envFlag, getActiveStaffByEmail, recordAudit, recordMagicLink, withContext } from "@clinic-genie/db";
 
 const devLinks = envFlag("AUTH_DEV_MAGIC_LINKS") && process.env.NODE_ENV !== "production";
 
@@ -28,7 +28,7 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
 export const authProviders = { devLinks, google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) };
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PostgresAdapter(getPool()),
+  adapter: PostgresAdapter(authAdapterClient()),
   session: { strategy: "database", maxAge: 12 * 60 * 60, updateAge: 60 * 60 },
   providers,
   pages: { signIn: "/sign-in", error: "/sign-in" },
