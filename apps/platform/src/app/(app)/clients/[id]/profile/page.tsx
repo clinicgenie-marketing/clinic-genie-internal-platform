@@ -69,7 +69,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
             {data.members.length === 0 && <li className="py-2 text-muted">No memberships.</li>}
           </ul>
           {isAdmin && nonMembers.length > 0 && (
-            <form action={membershipAction} className="flex items-end gap-2">
+            <form key={data.members.map((m) => m.id).join(",")} action={membershipAction} className="flex items-end gap-2">
               <input type="hidden" name="clientId" value={id} />
               <label className="text-sm flex-1">
                 <span className="block text-xs font-medium mb-1">Grant access to</span>
@@ -88,23 +88,25 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
       <Card>
         <CardHeader title="Websites" />
         <div className="px-5 pb-5 space-y-6">
+          {data.websites.length === 0 && <p className="text-sm text-muted">{edit ? "No websites recorded yet. Add a placeholder address below, not a real clinic URL." : "No websites recorded."}</p>}
           {data.websites.map((w) => (
             <div key={w.id} className="border-b border-line pb-5">
               {edit ? <WebsiteForm clientId={id} values={w} /> : <p className="text-sm">{w.name} {w.url}</p>}
             </div>
           ))}
-          {edit && <div><h3 className="text-sm font-semibold mb-2">Add a website</h3><WebsiteForm clientId={id} /></div>}
+          {edit && <div><h3 className="text-sm font-semibold mb-2">Add a website</h3><WebsiteForm key={data.websites.map((w) => w.id).join(",") || "none"} clientId={id} /></div>}
         </div>
       </Card>
       <Card>
         <CardHeader title="Account references" description="A reference is a saved link and identifier, never a password. Values that look like credentials are refused." />
         <div className="px-5 pb-5 space-y-6">
+          {data.refs.length === 0 && <p className="text-sm text-muted">{edit ? "No account references recorded yet. Save a link and an identifier, never a password." : "No account references recorded."}</p>}
           {data.refs.map((r) => (
             <div key={r.id} className={`border-b border-line pb-5 ${r.active ? "" : "opacity-70"}`}>
               {edit ? <ReferenceForm clientId={id} values={r} /> : <p className="text-sm">{label(r.kind)}: {r.label}</p>}
             </div>
           ))}
-          {edit && <div><h3 className="text-sm font-semibold mb-2">Add a reference</h3><ReferenceForm clientId={id} /></div>}
+          {edit && <div><h3 className="text-sm font-semibold mb-2">Add a reference</h3><ReferenceForm key={data.refs.map((r) => r.id).join(",") || "none"} clientId={id} /></div>}
         </div>
       </Card>
     </div>

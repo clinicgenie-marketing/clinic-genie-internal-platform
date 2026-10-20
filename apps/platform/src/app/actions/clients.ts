@@ -27,7 +27,9 @@ export async function createClientAction(_prev: ActionState, form: FormData): Pr
     );
     id = client.id;
   } catch (err) {
-    return toActionError(err);
+    const state = toActionError(err);
+    if (state && !state.ok && (err as { code?: string }).code === "23505") return { ok: false, error: "That identifier is already in use.", field: "slug" };
+    return state;
   }
   revalidatePath("/clients");
   redirect(`/clients/${id}`);

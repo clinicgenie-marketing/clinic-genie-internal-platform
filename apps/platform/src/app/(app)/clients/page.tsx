@@ -64,7 +64,11 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
               );
             })}
             {data.clients.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-6 text-center text-sm text-muted">No clients are visible to you. Ask an administrator for access.</td></tr>
+              <tr>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted">
+                  {archived === "1" ? "No archived clients." : canManageRegistry(access) ? "No clients yet. Create one and mark it as demonstration data." : "No clients are visible to you. Ask an administrator for access."}
+                </td>
+              </tr>
             )}
           </tbody>
         </Table>
