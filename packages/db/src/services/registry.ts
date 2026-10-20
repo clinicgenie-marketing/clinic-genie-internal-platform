@@ -174,10 +174,17 @@ export interface AccountReferenceInput {
 
 const SECRET_LIKE = /(password|passwd|secret|api[-_ ]?key|token)\s*[:=]/i;
 
+export class RegistryRuleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RegistryRuleError";
+  }
+}
+
 /** Rejects values that look like credentials. References point to a vault entry; they never hold the secret. */
 export function assertNoSecret(input: AccountReferenceInput): void {
   for (const v of [input.externalIdentifier, input.vaultReference, input.notes, input.label]) {
-    if (v && SECRET_LIKE.test(v)) throw new Error("This looks like a credential. Store the secret in the password vault and save only its reference here.");
+    if (v && SECRET_LIKE.test(v)) throw new RegistryRuleError("This looks like a credential. Store the secret in the password vault and save only its reference here.");
   }
 }
 
