@@ -5,7 +5,8 @@ import { Badge, PRIORITY_TONE, TASK_STATUS_TONE, label } from "@/components/ui/B
 import { Table, Td, Th } from "@/components/ui/Table";
 import { QuickTaskActions } from "./QuickTaskActions";
 
-export function TaskTable({ tasks, today, showClient = true, caption, canAct }: { tasks: TaskRow[]; today: string; showClient?: boolean; caption: string; canAct: boolean }) {
+export function TaskTable({ tasks, today, showClient = true, caption, canAct, emptyLabel = "No tasks match." }: { tasks: TaskRow[]; today: string; showClient?: boolean; caption: string; canAct: boolean; emptyLabel?: string }) {
+  const columns = 6 + (showClient ? 1 : 0) + (canAct ? 1 : 0);
   return (
     <Table caption={caption}>
       <thead>
@@ -56,7 +57,7 @@ export function TaskTable({ tasks, today, showClient = true, caption, canAct }: 
         })}
         {tasks.length === 0 && (
           <tr>
-            <td colSpan={8} className="px-3 py-6 text-center text-muted text-sm">No tasks match.</td>
+            <td colSpan={columns} className="px-3 py-6 text-center text-muted text-sm">{emptyLabel}</td>
           </tr>
         )}
       </tbody>

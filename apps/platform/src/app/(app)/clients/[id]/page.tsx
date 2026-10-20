@@ -38,7 +38,7 @@ export default async function ClientOverviewPage({ params }: { params: Promise<{
         <div className="space-y-6">
           <Card>
             <CardHeader title="Priority tasks" action={<span className="flex gap-3"><Link href={`/clients/${id}/tasks`} className="text-sm text-action hover:underline">All tasks</Link>{canAct && <LinkButton href={`/tasks/new?client=${id}`} size="sm">New task</LinkButton>}</span>} />
-            <TaskTable tasks={top} today={today} showClient={false} caption="Priority tasks" canAct={access.user.platform_role !== "read_only"} />
+            <TaskTable tasks={top} today={today} showClient={false} caption="Priority tasks" canAct={access.user.platform_role !== "read_only"} emptyLabel="No priority tasks yet." />
           </Card>
           <Card>
             <CardHeader title="Recent activity" action={<Link href={`/clients/${id}/timeline`} className="text-sm text-action hover:underline">Timeline</Link>} />
