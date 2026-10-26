@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  archiveClient, canEditClient, canManageRegistry, createAccountReference, createClient, createWebsite, grantMembership, restoreClient,
-  revokeMembership, updateAccountReference, updateClient, updateWebsite, type ClientChannel, type WebsiteRow,
+  archiveClient, canEditClient, canManageRegistry, createAccountReference, createClient, createClientContact, createWebsite, grantMembership, restoreClient,
+  revokeMembership, updateAccountReference, updateClient, updateClientContact, updateWebsite, type ClientChannel, type WebsiteRow,
 } from "@clinic-genie/db";
 import { CLIENT_CHANNELS } from "@clinic-genie/contracts";
 import { requireAccess } from "@/lib/session";
@@ -15,20 +15,55 @@ function channels(form: FormData): ClientChannel[] {
   return list(form, "channels").filter((c): c is ClientChannel => (CLIENT_CHANNELS as readonly string[]).includes(c));
 }
 
+function emailField(form: FormData, key: string): { value: string | null; error?: string } {
+  const value = optional(form, key);
+  if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { value: null, error: "Enter a valid email address." };
+  return { value: value?.toLowerCase() ?? null };
+}
+
+function shortCodeField(form: FormData): string | null {
+  const value = optional(form, "shortCode");
+  return value ? value.toUpperCase() : null;
+}
+
+function profileFields(form: FormData) {
+  return {
+    referenceNumber: optional(form, "referenceNumber"),
+    shortCode: shortCodeField(form),
+    specialty: optional(form, "specialty"),
+    legalName: optional(form, "legalName"),
+    publicName: optional(form, "publicName"),
+    address: optional(form, "address"),
+    contactPhone: optional(form, "contactPhone"),
+    enquiryOwnerUserId: optional(form, "enquiryOwnerUserId"),
+    notificationOwnerUserId: optional(form, "notificationOwnerUserId"),
+    administrationOwnerUserId: optional(form, "administrationOwnerUserId"),
+  };
+}
+
 export async function createClientAction(_prev: ActionState, form: FormData): Promise<ActionState> {
   const access = await requireAccess();
   if (!canManageRegistry(access)) return { ok: false, error: "Only admins and managers can create clients." };
   const slug = str(form, "slug").toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) return { ok: false, error: "Identifier must be lowercase letters, numbers and hyphens.", field: "slug" };
+  const contactEmail = emailField(form, "contactEmail");
+  if (contactEmail.error) return { ok: false, error: contactEmail.error, field: "contactEmail" };
+  const shortCode = shortCodeField(form);
+  if (shortCode && !/^[A-Z0-9][A-Z0-9-]{0,19}$/.test(shortCode)) return { ok: false, error: "Short code uses letters, numbers and hyphens.", field: "shortCode" };
   let id: string;
   try {
     const client = await staffTx(access, (db) =>
-      createClient(db, { slug, name: str(form, "name"), ownerUserId: optional(form, "ownerUserId"), channels: channels(form), isSynthetic: bool(form, "isSynthetic"), notes: optional(form, "notes") }, access.user.id),
+      createClient(db, { slug, name: str(form, "name"), ownerUserId: optional(form, "ownerUserId"), channels: channels(form), isSynthetic: bool(form, "isSynthetic"), notes: optional(form, "notes"), ...profileFields(form), contactEmail: contactEmail.value }, access.user.id),
     );
     id = client.id;
   } catch (err) {
     const state = toActionError(err);
-    if (state && !state.ok && (err as { code?: string }).code === "23505") return { ok: false, error: "That identifier is already in use.", field: "slug" };
+    if (state && !state.ok && (err as { code?: string; constraint?: string }).code === "23505") {
+      const constraint = (err as { constraint?: string }).constraint ?? "";
+      if (constraint.includes("short")) return { ok: false, error: "That short code is already in use.", field: "shortCode" };
+      if (constraint.includes("reference")) return { ok: false, error: "That reference number is already in use.", field: "referenceNumber" };
+      return { ok: false, error: "That identifier is already in use.", field: "slug" };
+    }
     return state;
   }
   revalidatePath("/clients");
@@ -39,10 +74,20 @@ export async function updateClientAction(_prev: ActionState, form: FormData): Pr
   const access = await requireAccess();
   if (!canManageRegistry(access)) return { ok: false, error: "Only admins and managers can edit client profiles." };
   const id = str(form, "clientId");
+  const contactEmail = emailField(form, "contactEmail");
+  if (contactEmail.error) return { ok: false, error: contactEmail.error, field: "contactEmail" };
+  const shortCode = shortCodeField(form);
+  if (shortCode && !/^[A-Z0-9][A-Z0-9-]{0,19}$/.test(shortCode)) return { ok: false, error: "Short code uses letters, numbers and hyphens.", field: "shortCode" };
   try {
-    await staffTx(access, (db) => updateClient(db, id, { name: str(form, "name"), ownerUserId: optional(form, "ownerUserId"), channels: channels(form), notes: optional(form, "notes") }, access.user.id));
+    await staffTx(access, (db) => updateClient(db, id, { name: str(form, "name"), ownerUserId: optional(form, "ownerUserId"), channels: channels(form), notes: optional(form, "notes"), ...profileFields(form), contactEmail: contactEmail.value }, access.user.id));
   } catch (err) {
-    return toActionError(err);
+    const state = toActionError(err);
+    if (state && !state.ok && (err as { code?: string; constraint?: string }).code === "23505") {
+      const constraint = (err as { constraint?: string }).constraint ?? "";
+      if (constraint.includes("short")) return { ok: false, error: "That short code is already in use.", field: "shortCode" };
+      return { ok: false, error: "That reference number is already in use.", field: "referenceNumber" };
+    }
+    return state;
   }
   revalidatePath(`/clients/${id}`, "layout");
   return { ok: true, message: "Profile saved." };
@@ -83,7 +128,7 @@ export async function saveReferenceAction(_prev: ActionState, form: FormData): P
   const clientId = str(form, "clientId");
   if (!canEditClient(access, clientId)) return { ok: false, error: "You cannot edit this client's account references." };
   const refId = optional(form, "referenceId");
-  const input = { kind: str(form, "kind") || "other", label: str(form, "label"), externalIdentifier: optional(form, "externalIdentifier"), url: optional(form, "url"), vaultReference: optional(form, "vaultReference"), notes: optional(form, "notes") };
+  const input = { kind: str(form, "kind") || "other", label: str(form, "label"), externalIdentifier: optional(form, "externalIdentifier"), url: optional(form, "url"), vaultReference: optional(form, "vaultReference"), notes: optional(form, "notes"), ownerUserId: optional(form, "ownerUserId") };
   if (!input.label) return { ok: false, error: "Label is required.", field: "label" };
   if (input.url && !/^https?:\/\//.test(input.url)) return { ok: false, error: "Link must start with http:// or https://.", field: "url" };
   try {
@@ -93,6 +138,25 @@ export async function saveReferenceAction(_prev: ActionState, form: FormData): P
   }
   revalidatePath(`/clients/${clientId}`, "layout");
   return { ok: true, message: "Reference saved. Secrets stay in the vault." };
+}
+
+export async function saveContactAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const access = await requireAccess();
+  const clientId = str(form, "clientId");
+  if (!canManageRegistry(access)) return { ok: false, error: "Only admins and managers can edit client contacts." };
+  const contactId = optional(form, "contactId");
+  const name = str(form, "name");
+  if (!name) return { ok: false, error: "Contact name is required.", field: "name" };
+  const workEmail = emailField(form, "workEmail");
+  if (workEmail.error) return { ok: false, error: workEmail.error, field: "workEmail" };
+  const input = { name, designation: optional(form, "designation"), workEmail: workEmail.value, workPhone: optional(form, "workPhone"), isPrimary: bool(form, "isPrimary"), active: !bool(form, "deactivate") };
+  try {
+    await staffTx(access, (db) => (contactId ? updateClientContact(db, contactId, input, access.user.id) : createClientContact(db, clientId, input, access.user.id).then(() => undefined)));
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/clients/${clientId}`, "layout");
+  return { ok: true, message: "Contact saved." };
 }
 
 export async function membershipAction(form: FormData): Promise<void> {
