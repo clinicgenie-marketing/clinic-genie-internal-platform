@@ -11,7 +11,7 @@ The previous internal-dashboard-first pack is superseded. Do not combine its two
 Read 01, 02, 03 and 04 before coding. Resolve the discovery decisions in 01. Use the relevant module file, 16_BUILD_RULES.md, 17_BUILD_TICKETS.md and 18_ACCEPTANCE_TESTS.md for each ticket. Use 20_DELIVERY_TIMELINE.md for sequencing and 19_SEED_DATA_TEST_PLAN.md for safe demonstrations.
 
 ## Target outcome
-One reliable clinic website, a reusable shared form/lead/notification service, and a second dummy website proving reuse without copying backend logic. Public pages and form processing must not depend on the Control Centre interface being available.
+One reliable clinic website, a reusable shared form/lead/notification service, and a second dummy website proving reuse without copying backend logic. Public pages and form processing must not depend on the Control Centre interface being available. The authorized first-soft-launch SEO scope and post-launch backlog are in [06_WEBSITE_STARTER_SEO.md](06_WEBSITE_STARTER_SEO.md).
 
 ## Milestones
 - Working Days 5-7: reusable foundation demonstration.

@@ -12,6 +12,13 @@ Implement versioned migrations after discovery confirms the database. Field name
 | notification_outbox | id, submission_id, recipient_ref, status, attempts, next_attempt_at, provider_message_id | Durable job tied to submission |
 | booking_config | website_id, provider_type, approved_url/config_ref, fallback | No browser-visible provider secret |
 | audit_events | actor, action, target, timestamp, outcome, safe metadata | Protected append-oriented history |
+| seo_page_settings | client_id, website_id, page_path, title, description, canonical_path, indexable, updated_by | Unique page path per site; only connected public sites receive published values |
+| seo_website_settings | website_id, client_id, Google Search Console HTML verification token | Token is published as a verification meta tag; ownership must still be confirmed in Search Console |
+| seo_redirects | client_id, website_id, source_path, destination_path, active, actors, timestamps | Individual same-site 301 rules; unique active source and loop validation |
+| seo_site_tokens | client_id, website_id, SHA-256 token hash, created_by, revoked_at | One active server-to-server credential per website; raw token shown once and never stored |
+| seo_business_profiles | client_id, branch_name, Google profile URL/ID, setup_status, notes, updated_by | One reference per client branch; no Google API connection or claimed external verification |
+
+SEO settings and redirect mutations are audited. SEO website tokens are visible only to trusted service-context code; staff receive a generated token once for deployment configuration. Branch-level Business Profile records are references and manually maintained setup statuses, not a connected integration.
 
 Proposed supporting fields: site-scoped idempotency key and request digest, form version, privacy notice version, retention expiry, worker lease and notification event type. Document additions in the schema decision log.
 
