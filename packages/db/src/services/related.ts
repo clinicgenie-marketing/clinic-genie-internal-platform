@@ -22,6 +22,12 @@ export function isRelatedType(v: string): v is RelatedRecordType {
   return v in TABLES;
 }
 
+/** A link is stored only when both sides are present. A type with no record stays blank. */
+export function relatedPair(type: string | null | undefined, id: string | null | undefined): { type: string | null; id: string | null } {
+  if (!type || !id) return { type: null, id: null };
+  return { type, id };
+}
+
 /** Confirms a related record exists and belongs to the same client. Returns its display title. */
 export async function resolveRelated(db: Queryable, clientId: string, type: string, id: string): Promise<{ title: string } | null> {
   if (!isRelatedType(type)) return null;

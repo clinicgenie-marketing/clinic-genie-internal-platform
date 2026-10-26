@@ -12,6 +12,8 @@ import { databaseNameFromUrl, ensureAppRole, runMigrations } from "./migrate";
 export const BACKUP_TABLES = [
   "staff_users",
   "clients",
+  "client_contacts",
+  "form_routes",
   "memberships",
   "websites",
   "account_references",
@@ -22,6 +24,11 @@ export const BACKUP_TABLES = [
   "approval_decisions",
   "seo_pages",
   "seo_changes",
+  "seo_page_settings",
+  "seo_website_settings",
+  "seo_redirects",
+  "seo_site_tokens",
+  "seo_business_profiles",
   "ads_audits",
   "ads_findings",
   "ads_changes",
@@ -34,6 +41,9 @@ export const BACKUP_TABLES = [
   "medical_sources",
   "report_snapshots",
   "report_notes",
+  "saved_reports",
+  "saved_report_versions",
+  "saved_report_downloads",
   "timeline_events",
   "audit_events",
   "backup_runs",
@@ -132,6 +142,7 @@ export async function restoreTest(sourcePool: pg.Pool, adminUrl: string, backupP
         const table = seq.replace("_id_seq", "");
         await client.query(`select setval('${seq}', coalesce((select max(id) from ${table}), 0) + 1, false)`);
       }
+      await client.query("select setval('report_download_serial', coalesce((select max(serial_number) from saved_report_downloads), 0) + 1, false)");
       await client.query("commit");
     } catch (err) {
       await client.query("rollback");

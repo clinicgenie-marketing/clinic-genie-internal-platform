@@ -13,7 +13,26 @@ export interface ClientRow {
   channels: ClientChannel[];
   is_synthetic: boolean;
   notes: string | null;
+  reference_number: string | null;
+  short_code: string | null;
+  specialty: string | null;
+  legal_name: string | null;
+  public_name: string | null;
+  address: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  enquiry_owner_user_id: string | null;
+  enquiry_owner_name: string | null;
+  notification_owner_user_id: string | null;
+  notification_owner_name: string | null;
+  administration_owner_user_id: string | null;
+  administration_owner_name: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  updated_by: string | null;
+  updated_by_name: string | null;
   created_at: Date;
+  updated_at: Date;
   archived_at: Date | null;
 }
 
@@ -39,9 +58,26 @@ export interface AccountReferenceRow {
   url: string | null;
   vault_reference: string | null;
   notes: string | null;
+  owner_user_id: string | null;
+  owner_name: string | null;
   active: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface ClientContactRow {
+  id: string;
+  client_id: string;
+  name: string;
+  designation: string | null;
+  work_email: string | null;
+  work_phone: string | null;
+  is_primary: boolean;
+  active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface MembershipRow {
@@ -64,11 +100,62 @@ export interface StaffRow {
   membership_count: number;
 }
 
-const CLIENT_SELECT = `select c.*, u.display_name as owner_name from clients c left join staff_users u on u.id = c.owner_user_id`;
+const CLIENT_SELECT = `select c.*,
+  owner.display_name as owner_name,
+  enquiry.display_name as enquiry_owner_name,
+  notice.display_name as notification_owner_name,
+  adminc.display_name as administration_owner_name,
+  creator.display_name as created_by_name,
+  editor.display_name as updated_by_name
+from clients c
+left join staff_users owner on owner.id = c.owner_user_id
+left join staff_users enquiry on enquiry.id = c.enquiry_owner_user_id
+left join staff_users notice on notice.id = c.notification_owner_user_id
+left join staff_users adminc on adminc.id = c.administration_owner_user_id
+left join staff_users creator on creator.id = c.created_by
+left join staff_users editor on editor.id = c.updated_by`;
 
-export async function listClients(db: Queryable, opts: { includeArchived?: boolean } = {}): Promise<ClientRow[]> {
-  const { rows } = await db.query<ClientRow>(`${CLIENT_SELECT} where ($1 or c.status = 'active') order by c.status, c.name`, [opts.includeArchived ?? false]);
+export async function listClients(db: Queryable, opts: { includeArchived?: boolean; query?: string; specialty?: string; ownerUserId?: string; status?: "active" | "archived" | "all" } = {}): Promise<ClientRow[]> {
+  const query = opts.query?.trim();
+  const { rows } = await db.query<ClientRow>(
+    `${CLIENT_SELECT}
+     where (
+       ($1::text is not null and c.status = $1)
+       or ($1::text is null and ($2::bool or c.status = 'active'))
+     )
+     and ($3::uuid is null or c.owner_user_id = $3)
+     and ($4::text is null or c.specialty = $4)
+     and (
+       $5::text is null
+       or c.name ilike $5 escape E'\\\\'
+       or coalesce(c.public_name, '') ilike $5 escape E'\\\\'
+       or coalesce(c.legal_name, '') ilike $5 escape E'\\\\'
+       or coalesce(c.reference_number, '') ilike $5 escape E'\\\\'
+       or coalesce(c.short_code, '') ilike $5 escape E'\\\\'
+       or coalesce(c.specialty, '') ilike $5 escape E'\\\\'
+       or c.slug ilike $5 escape E'\\\\'
+     )
+     order by c.reference_number nulls last, c.name`,
+    [
+      opts.status && opts.status !== "all" ? opts.status : null,
+      opts.includeArchived ?? false,
+      opts.ownerUserId ?? null,
+      opts.specialty?.trim() || null,
+      query ? `%${query.replace(/[%_\\]/g, "\\$&")}%` : null,
+    ],
+  );
   return rows;
+}
+
+export async function listClientSpecialties(db: Queryable, opts: { status?: "active" | "archived" | "all" } = {}): Promise<string[]> {
+  const { rows } = await db.query<{ specialty: string }>(
+    `select distinct specialty from clients
+     where specialty is not null and specialty <> ''
+       and ($1::text is null or status = $1)
+     order by specialty`,
+    [opts.status && opts.status !== "all" ? opts.status : null],
+  );
+  return rows.map((row) => row.specialty);
 }
 
 export async function getClient(db: Queryable, id: string): Promise<ClientRow | null> {
@@ -88,12 +175,31 @@ export interface ClientInput {
   channels: ClientChannel[];
   isSynthetic: boolean;
   notes: string | null;
+  referenceNumber?: string | null;
+  shortCode?: string | null;
+  specialty?: string | null;
+  legalName?: string | null;
+  publicName?: string | null;
+  address?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  enquiryOwnerUserId?: string | null;
+  notificationOwnerUserId?: string | null;
+  administrationOwnerUserId?: string | null;
 }
 
 export async function createClient(db: Queryable, input: ClientInput, actorUserId: string): Promise<ClientRow> {
   const { rows } = await db.query<{ id: string }>(
-    "insert into clients (slug, name, owner_user_id, channels, is_synthetic, notes) values ($1, $2, $3, $4, $5, $6) returning id",
-    [input.slug, input.name, input.ownerUserId, input.channels, input.isSynthetic, input.notes],
+    `insert into clients (
+       slug, name, owner_user_id, channels, is_synthetic, notes,
+       reference_number, short_code, specialty, legal_name, public_name, address, contact_email, contact_phone,
+       enquiry_owner_user_id, notification_owner_user_id, administration_owner_user_id, created_by, updated_by
+     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18) returning id`,
+    [
+      input.slug, input.name, input.ownerUserId, input.channels, input.isSynthetic, input.notes,
+      input.referenceNumber ?? null, input.shortCode ?? null, input.specialty ?? null, input.legalName ?? null, input.publicName ?? null, input.address ?? null, input.contactEmail ?? null, input.contactPhone ?? null,
+      input.enquiryOwnerUserId ?? null, input.notificationOwnerUserId ?? null, input.administrationOwnerUserId ?? null, actorUserId,
+    ],
   );
   const id = rows[0]!.id;
   await recordAudit(db, { actorType: "staff", actorUserId, action: "client.create", targetType: "client", targetId: id, clientId: id, outcome: "success", metadata: { slug: input.slug } });
@@ -102,20 +208,32 @@ export async function createClient(db: Queryable, input: ClientInput, actorUserI
 }
 
 export async function updateClient(db: Queryable, id: string, input: Omit<ClientInput, "slug" | "isSynthetic">, actorUserId: string): Promise<void> {
-  await db.query("update clients set name = $2, owner_user_id = $3, channels = $4, notes = $5 where id = $1", [id, input.name, input.ownerUserId, input.channels, input.notes]);
-  await recordAudit(db, { actorType: "staff", actorUserId, action: "client.update", targetType: "client", targetId: id, clientId: id, outcome: "success", metadata: { fields: ["name", "owner", "channels", "notes"] } });
+  await db.query(
+    `update clients set
+       name = $2, owner_user_id = $3, channels = $4, notes = $5,
+       reference_number = $6, short_code = $7, specialty = $8, legal_name = $9, public_name = $10, address = $11, contact_email = $12, contact_phone = $13,
+       enquiry_owner_user_id = $14, notification_owner_user_id = $15, administration_owner_user_id = $16,
+       updated_by = $17, updated_at = now()
+     where id = $1`,
+    [
+      id, input.name, input.ownerUserId, input.channels, input.notes,
+      input.referenceNumber ?? null, input.shortCode ?? null, input.specialty ?? null, input.legalName ?? null, input.publicName ?? null, input.address ?? null, input.contactEmail ?? null, input.contactPhone ?? null,
+      input.enquiryOwnerUserId ?? null, input.notificationOwnerUserId ?? null, input.administrationOwnerUserId ?? null, actorUserId,
+    ],
+  );
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client.update", targetType: "client", targetId: id, clientId: id, outcome: "success", metadata: { fields: ["profile", "owner", "operational_contacts"] } });
 }
 
 /** Soft archive. Every linked record is retained. */
 export async function archiveClient(db: Queryable, id: string, actorUserId: string): Promise<void> {
-  const { rowCount } = await db.query("update clients set status = 'archived', archived_at = now() where id = $1 and status = 'active'", [id]);
+  const { rowCount } = await db.query("update clients set status = 'archived', archived_at = now(), updated_at = now(), updated_by = $2 where id = $1 and status = 'active'", [id, actorUserId]);
   if (!rowCount) return;
   await recordAudit(db, { actorType: "staff", actorUserId, action: "client.archive", targetType: "client", targetId: id, clientId: id, outcome: "success" });
   await recordTimeline(db, { clientId: id, eventType: "client_archived", title: "Client archived", relatedType: null, relatedId: null, actorUserId, dedupeKey: `client_archived:${id}:${Date.now()}` });
 }
 
 export async function restoreClient(db: Queryable, id: string, actorUserId: string): Promise<void> {
-  await db.query("update clients set status = 'active', archived_at = null where id = $1", [id]);
+  await db.query("update clients set status = 'active', archived_at = null, updated_at = now(), updated_by = $2 where id = $1", [id, actorUserId]);
   await recordAudit(db, { actorType: "staff", actorUserId, action: "client.restore", targetType: "client", targetId: id, clientId: id, outcome: "success" });
 }
 
@@ -159,7 +277,14 @@ export async function updateWebsite(
 // --- Account references -----------------------------------------------------
 
 export async function listAccountReferences(db: Queryable, clientId: string, includeInactive = false): Promise<AccountReferenceRow[]> {
-  const { rows } = await db.query<AccountReferenceRow>("select * from account_references where client_id = $1 and ($2 or active) order by kind, label", [clientId, includeInactive]);
+  const { rows } = await db.query<AccountReferenceRow>(
+    `select r.*, u.display_name as owner_name
+     from account_references r
+     left join staff_users u on u.id = r.owner_user_id
+     where r.client_id = $1 and ($2 or r.active)
+     order by r.kind, r.label`,
+    [clientId, includeInactive],
+  );
   return rows;
 }
 
@@ -170,6 +295,7 @@ export interface AccountReferenceInput {
   url: string | null;
   vaultReference: string | null;
   notes: string | null;
+  ownerUserId?: string | null;
 }
 
 const SECRET_LIKE = /(password|passwd|secret|api[-_ ]?key|token)\s*[:=]/i;
@@ -191,8 +317,12 @@ export function assertNoSecret(input: AccountReferenceInput): void {
 export async function createAccountReference(db: Queryable, clientId: string, input: AccountReferenceInput, actorUserId: string): Promise<AccountReferenceRow> {
   assertNoSecret(input);
   const { rows } = await db.query<AccountReferenceRow>(
-    "insert into account_references (client_id, kind, label, external_identifier, url, vault_reference, notes) values ($1, $2, $3, $4, $5, $6, $7) returning *",
-    [clientId, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes],
+    `with inserted as (
+       insert into account_references (client_id, kind, label, external_identifier, url, vault_reference, notes, owner_user_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8) returning *
+     )
+     select i.*, u.display_name as owner_name from inserted i left join staff_users u on u.id = i.owner_user_id`,
+    [clientId, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes, input.ownerUserId ?? null],
   );
   await recordAudit(db, { actorType: "staff", actorUserId, action: "account_reference.create", targetType: "account_reference", targetId: rows[0]!.id, clientId, outcome: "success", metadata: { kind: input.kind } });
   return rows[0]!;
@@ -201,12 +331,61 @@ export async function createAccountReference(db: Queryable, clientId: string, in
 export async function updateAccountReference(db: Queryable, id: string, input: AccountReferenceInput & { active: boolean }, actorUserId: string): Promise<void> {
   assertNoSecret(input);
   const { rows } = await db.query<AccountReferenceRow>(
-    "update account_references set kind = $2, label = $3, external_identifier = $4, url = $5, vault_reference = $6, notes = $7, active = $8, updated_at = now() where id = $1 returning *",
-    [id, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes, input.active],
+    `with updated as (
+       update account_references set kind = $2, label = $3, external_identifier = $4, url = $5, vault_reference = $6, notes = $7, active = $8, owner_user_id = $9, updated_at = now()
+       where id = $1 returning *
+     )
+     select i.*, u.display_name as owner_name from updated i left join staff_users u on u.id = i.owner_user_id`,
+    [id, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes, input.active, input.ownerUserId ?? null],
   );
   const ref = rows[0];
   if (!ref) return;
   await recordAudit(db, { actorType: "staff", actorUserId, action: "account_reference.update", targetType: "account_reference", targetId: id, clientId: ref.client_id, outcome: "success", metadata: { kind: input.kind, active: input.active } });
+}
+
+// --- Client contacts --------------------------------------------------------
+
+export async function listClientContacts(db: Queryable, clientId: string, includeInactive = false): Promise<ClientContactRow[]> {
+  const { rows } = await db.query<ClientContactRow>(
+    "select * from client_contacts where client_id = $1 and ($2 or active) order by is_primary desc, name",
+    [clientId, includeInactive],
+  );
+  return rows;
+}
+
+export interface ClientContactInput {
+  name: string;
+  designation: string | null;
+  workEmail: string | null;
+  workPhone: string | null;
+  isPrimary: boolean;
+}
+
+async function clearOtherPrimaryContacts(db: Queryable, clientId: string, exceptId: string | null): Promise<void> {
+  await db.query("update client_contacts set is_primary = false, updated_at = now() where client_id = $1 and is_primary and ($2::uuid is null or id <> $2)", [clientId, exceptId]);
+}
+
+export async function createClientContact(db: Queryable, clientId: string, input: ClientContactInput, actorUserId: string): Promise<ClientContactRow> {
+  if (input.isPrimary) await clearOtherPrimaryContacts(db, clientId, null);
+  const { rows } = await db.query<ClientContactRow>(
+    `insert into client_contacts (client_id, name, designation, work_email, work_phone, is_primary, created_by, updated_by)
+     values ($1, $2, $3, $4, $5, $6, $7, $7) returning *`,
+    [clientId, input.name, input.designation, input.workEmail, input.workPhone, input.isPrimary, actorUserId],
+  );
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client_contact.create", targetType: "client_contact", targetId: rows[0]!.id, clientId, outcome: "success", metadata: { primary: input.isPrimary } });
+  return rows[0]!;
+}
+
+export async function updateClientContact(db: Queryable, id: string, input: ClientContactInput & { active: boolean }, actorUserId: string): Promise<void> {
+  const current = (await db.query<{ client_id: string }>("select client_id from client_contacts where id = $1", [id])).rows[0];
+  if (!current) return;
+  const primary = input.active && input.isPrimary;
+  if (primary) await clearOtherPrimaryContacts(db, current.client_id, id);
+  await db.query(
+    `update client_contacts set name = $2, designation = $3, work_email = $4, work_phone = $5, is_primary = $6, active = $7, updated_by = $8, updated_at = now() where id = $1`,
+    [id, input.name, input.designation, input.workEmail, input.workPhone, primary, input.active, actorUserId],
+  );
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client_contact.update", targetType: "client_contact", targetId: id, clientId: current.client_id, outcome: "success", metadata: { primary, active: input.active } });
 }
 
 // --- Staff and memberships --------------------------------------------------
@@ -231,6 +410,14 @@ export async function createStaff(db: Queryable, input: { email: string; display
   const { rows } = await db.query<{ id: string }>("insert into staff_users (email, display_name, platform_role) values ($1, $2, $3) returning id", [email, input.displayName.trim(), input.role]);
   await recordAudit(db, { actorType: actorUserId ? "staff" : "system", actorUserId, action: "staff.create", targetType: "staff_user", targetId: rows[0]!.id, outcome: "success", metadata: { role: input.role } });
   return rows[0]!.id;
+}
+
+export async function updateOwnName(db: Queryable, userId: string, displayName: string): Promise<void> {
+  const name = displayName.trim();
+  if (!name) throw new Error("Enter your name.");
+  const { rowCount } = await db.query("update staff_users set display_name = $2 where id = $1 and active", [userId, name.slice(0, 120)]);
+  if (!rowCount) throw new Error("Your name could not be saved.");
+  await recordAudit(db, { actorType: "staff", actorUserId: userId, action: "staff.update", targetType: "staff_user", targetId: userId, outcome: "success", metadata: { fields: ["display_name"] } });
 }
 
 export async function updateStaff(db: Queryable, userId: string, input: { displayName: string; role: PlatformRole; active: boolean }, actorUserId: string): Promise<void> {

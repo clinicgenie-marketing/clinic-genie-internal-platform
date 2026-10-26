@@ -100,6 +100,17 @@ export const SERVICE: DbContext = { kind: "service" };
  */
 export function authAdapterClient(pool = getPool()): pg.Pool {
   return {
-    query: (text: string, params?: unknown[]) => withContext(SERVICE, (db) => db.query(text, params), pool),
+    query: async (text: string, params?: unknown[]) => {
+      try {
+        return await withContext(SERVICE, (db) => db.query(text, params), pool);
+      } catch (err) {
+        const cause = err instanceof Error ? err.cause : undefined;
+        const causeCode = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : undefined;
+        // #region agent log
+        fetch("http://127.0.0.1:7777/ingest/d1e6aa15-e325-4576-8252-5cc7335c095b", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4b5b07" }, body: JSON.stringify({ sessionId: "4b5b07", runId: "verify", hypothesisId: causeCode === "ECONNREFUSED" ? "A" : "C", location: "packages/db/src/client.ts:authAdapterClient", message: "auth adapter query failed", data: { errorName: err instanceof Error ? err.name : "unknown", causeCode: causeCode ?? null, op: String(text).trim().slice(0, 32) }, timestamp: Date.now() }) }).catch(() => {});
+        // #endregion
+        throw err;
+      }
+    },
   } as pg.Pool;
 }

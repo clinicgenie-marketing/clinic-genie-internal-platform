@@ -14,7 +14,7 @@ afterAll(async () => {
 describe("client isolation through row-level security (A-04, A-05, A-06)", () => {
   it("a specialist sees only clients they are a member of", async () => {
     const specB = await staffByEmail("specialist-b@example.invalid");
-    const clients = await asContext(staffCtx(specB), (db) => listClients(db));
+    const clients = await asContext(staffCtx(specB), (db) => listClients(db, { includeArchived: true }));
     expect(clients.map((c) => c.slug)).toEqual(["northgate-physio"]);
   });
 
