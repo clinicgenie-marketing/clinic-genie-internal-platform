@@ -1,6 +1,6 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-const control = "block w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-base text-ink min-h-11 placeholder:text-muted/70 disabled:bg-surface-muted disabled:text-muted";
+const control = "block w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink min-h-11 placeholder:text-muted/70 disabled:bg-surface-muted disabled:text-muted";
 
 export function Field({ label, htmlFor, hint, error, required, children }: { label: string; htmlFor: string; hint?: ReactNode; error?: string | null; required?: boolean; children: ReactNode }) {
   return (
@@ -42,6 +42,6 @@ export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputEleme
 
 export function FormError({ state }: { state: { ok: false; error: string } | { ok: true; message?: string } | null | undefined }) {
   if (!state) return null;
-  if (state.ok) return state.message ? <p role="status" className="text-sm text-good bg-good-bg rounded-md px-3 py-2">{state.message}</p> : null;
-  return <p role="alert" className="text-sm text-bad bg-bad-bg rounded-md px-3 py-2">{state.error}</p>;
+  if (state.ok) return state.message ? <p role="status" className="text-sm text-good bg-good-bg rounded-xl px-3 py-2">{state.message}</p> : null;
+  return <p role="alert" className="text-sm text-bad bg-bad-bg rounded-xl px-3 py-2">{state.error}</p>;
 }

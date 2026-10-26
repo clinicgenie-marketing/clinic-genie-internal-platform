@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { ACCOUNT_REFERENCE_KINDS, CLIENT_CHANNELS } from "@clinic-genie/contracts";
-import { createClientAction, saveReferenceAction, saveWebsiteAction, updateClientAction } from "@/app/actions/clients";
+import { createClientAction, saveContactAction, saveReferenceAction, saveWebsiteAction, updateClientAction } from "@/app/actions/clients";
 import type { ActionState } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 import { Checkbox, Field, FormError, Input, Select, Textarea } from "@/components/ui/Field";
@@ -22,7 +22,18 @@ function describedBy(id: string, error: string | null, hint = false) {
   };
 }
 
-export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; staff: Staff; values: { clientId?: string; slug?: string; name?: string; ownerUserId?: string | null; channels?: string[]; notes?: string | null; isSynthetic?: boolean } }) {
+function StaffSelect({ id, name, value, onChange, staff }: { id: string; name: string; value: string; onChange: (value: string) => void; staff: Staff }) {
+  return (
+    <Select id={id} name={name} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">Unassigned</option>
+      {staff.map((s) => (
+        <option key={s.id} value={s.id}>{s.display_name}</option>
+      ))}
+    </Select>
+  );
+}
+
+export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; staff: Staff; values: { clientId?: string; slug?: string; name?: string; ownerUserId?: string | null; channels?: string[]; notes?: string | null; isSynthetic?: boolean; referenceNumber?: string | null; shortCode?: string | null; specialty?: string | null; legalName?: string | null; publicName?: string | null; address?: string | null; contactEmail?: string | null; contactPhone?: string | null; enquiryOwnerUserId?: string | null; notificationOwnerUserId?: string | null; administrationOwnerUserId?: string | null } }) {
   const [state, action, pending] = useActionState(mode === "create" ? createClientAction : updateClientAction, null);
   const [name, setName] = useState(values.name ?? "");
   const [slug, setSlug] = useState(values.slug ?? "");
@@ -30,13 +41,33 @@ export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; s
   const [channels, setChannels] = useState(values.channels ?? []);
   const [notes, setNotes] = useState(values.notes ?? "");
   const [synthetic, setSynthetic] = useState(Boolean(values.isSynthetic));
+  const [referenceNumber, setReferenceNumber] = useState(values.referenceNumber ?? "");
+  const [shortCode, setShortCode] = useState(values.shortCode ?? "");
+  const [specialty, setSpecialty] = useState(values.specialty ?? "");
+  const [legalName, setLegalName] = useState(values.legalName ?? "");
+  const [publicName, setPublicName] = useState(values.publicName ?? "");
+  const [address, setAddress] = useState(values.address ?? "");
+  const [contactEmail, setContactEmail] = useState(values.contactEmail ?? "");
+  const [contactPhone, setContactPhone] = useState(values.contactPhone ?? "");
+  const [enquiryOwner, setEnquiryOwner] = useState(values.enquiryOwnerUserId ?? "");
+  const [notificationOwner, setNotificationOwner] = useState(values.notificationOwnerUserId ?? "");
+  const [administrationOwner, setAdministrationOwner] = useState(values.administrationOwnerUserId ?? "");
   const err = (f: string) => (state && !state.ok && state.field === f ? state.error : null);
   return (
     <form action={action} className="space-y-5">
       {values.clientId && <input type="hidden" name="clientId" value={values.clientId} />}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Client name" htmlFor="name" required>
+        <Field label="Client ID" htmlFor="referenceNumber" error={err("referenceNumber")} hint="Unique client reference, for example CG-001.">
+          <Input id="referenceNumber" name="referenceNumber" value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} maxLength={40} {...describedBy("referenceNumber", err("referenceNumber"), true)} />
+        </Field>
+        <Field label="Short code" htmlFor="shortCode" error={err("shortCode")} hint="Clinic abbreviation, for example CFAC.">
+          <Input id="shortCode" name="shortCode" value={shortCode} onChange={(e) => setShortCode(e.target.value.toUpperCase())} maxLength={20} {...describedBy("shortCode", err("shortCode"), true)} />
+        </Field>
+        <Field label="Clinic name" htmlFor="name" required>
           <Input id="name" name="name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />
+        </Field>
+        <Field label="Specialty" htmlFor="specialty">
+          <Input id="specialty" name="specialty" value={specialty} onChange={(e) => setSpecialty(e.target.value)} maxLength={80} />
         </Field>
         {mode === "create" ? (
           <Field label="Identifier" htmlFor="slug" required hint="Lowercase, numbers and hyphens. Permanent." error={err("slug")}>
@@ -47,15 +78,40 @@ export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; s
             <Input id="slug-ro" value={values.slug ?? ""} readOnly aria-readonly="true" className="read-only:bg-surface-muted read-only:text-muted" />
           </Field>
         )}
+        <Field label="Clinic Genie owner" htmlFor="ownerUserId" hint="The staff member answerable for this client.">
+          <StaffSelect id="ownerUserId" name="ownerUserId" value={owner} onChange={setOwner} staff={staff} />
+        </Field>
+        <Field label="Registered business name" htmlFor="legalName">
+          <Input id="legalName" name="legalName" value={legalName} onChange={(e) => setLegalName(e.target.value)} maxLength={160} />
+        </Field>
+        <Field label="Public clinic name" htmlFor="publicName">
+          <Input id="publicName" name="publicName" value={publicName} onChange={(e) => setPublicName(e.target.value)} maxLength={160} />
+        </Field>
+        <Field label="General email" htmlFor="contactEmail" error={err("contactEmail")}>
+          <Input id="contactEmail" name="contactEmail" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={160} {...describedBy("contactEmail", err("contactEmail"))} />
+        </Field>
+        <Field label="General telephone" htmlFor="contactPhone">
+          <Input id="contactPhone" name="contactPhone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={40} />
+        </Field>
       </div>
-      <Field label="Accountable owner" htmlFor="ownerUserId" hint="The staff member answerable for this client.">
-        <Select id="ownerUserId" name="ownerUserId" value={owner} onChange={(e) => setOwner(e.target.value)}>
-          <option value="">Unassigned</option>
-          {staff.map((s) => (
-            <option key={s.id} value={s.id}>{s.display_name}</option>
-          ))}
-        </Select>
+      <Field label="Clinic address" htmlFor="address">
+        <Textarea id="address" name="address" value={address} onChange={(e) => setAddress(e.target.value)} maxLength={300} />
       </Field>
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium">Operational contacts</legend>
+        <p className="text-xs text-muted">Staff responsible for each kind of operational issue. These are not patient contacts.</p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Enquiries" htmlFor="enquiryOwnerUserId">
+            <StaffSelect id="enquiryOwnerUserId" name="enquiryOwnerUserId" value={enquiryOwner} onChange={setEnquiryOwner} staff={staff} />
+          </Field>
+          <Field label="Notification issues" htmlFor="notificationOwnerUserId">
+            <StaffSelect id="notificationOwnerUserId" name="notificationOwnerUserId" value={notificationOwner} onChange={setNotificationOwner} staff={staff} />
+          </Field>
+          <Field label="Account administration" htmlFor="administrationOwnerUserId">
+            <StaffSelect id="administrationOwnerUserId" name="administrationOwnerUserId" value={administrationOwner} onChange={setAdministrationOwner} staff={staff} />
+          </Field>
+        </div>
+      </fieldset>
       <fieldset>
         <legend className="text-sm font-medium mb-1">Active channels</legend>
         <div className="flex flex-wrap gap-x-5">
@@ -78,7 +134,43 @@ export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; s
         <Checkbox name="isSynthetic" label="This is demonstration data (fictional client)" checked={synthetic} onChange={(e) => setSynthetic(e.target.checked)} />
       )}
       <FormError state={banner(state)} />
-      <Button type="submit" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : mode === "create" ? "Create client" : "Save profile"}</Button>
+      <Button type="submit" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : mode === "create" ? "Create client" : "Save details"}</Button>
+    </form>
+  );
+}
+
+export function ContactForm({ clientId, values }: { clientId: string; values?: { id: string; name: string; designation: string | null; work_email: string | null; work_phone: string | null; is_primary: boolean; active: boolean } }) {
+  const [state, action, pending] = useActionState(saveContactAction, null);
+  const [name, setName] = useState(values?.name ?? "");
+  const [designation, setDesignation] = useState(values?.designation ?? "");
+  const [workEmail, setWorkEmail] = useState(values?.work_email ?? "");
+  const [workPhone, setWorkPhone] = useState(values?.work_phone ?? "");
+  const [primary, setPrimary] = useState(values?.is_primary ?? false);
+  const [deactivate, setDeactivate] = useState(values ? !values.active : false);
+  const err = (f: string) => (state && !state.ok && state.field === f ? state.error : null);
+  const id = values?.id ?? "new";
+  return (
+    <form action={action} className="space-y-4">
+      <input type="hidden" name="clientId" value={clientId} />
+      {values && <input type="hidden" name="contactId" value={values.id} />}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Contact name" htmlFor={`c-name-${id}`} required error={err("name")}>
+          <Input id={`c-name-${id}`} name="name" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} {...describedBy(`c-name-${id}`, err("name"))} />
+        </Field>
+        <Field label="Designation" htmlFor={`c-role-${id}`}>
+          <Input id={`c-role-${id}`} name="designation" value={designation} onChange={(e) => setDesignation(e.target.value)} maxLength={80} />
+        </Field>
+        <Field label="Work email" htmlFor={`c-email-${id}`} error={err("workEmail")}>
+          <Input id={`c-email-${id}`} name="workEmail" type="email" value={workEmail} onChange={(e) => setWorkEmail(e.target.value)} maxLength={160} {...describedBy(`c-email-${id}`, err("workEmail"))} />
+        </Field>
+        <Field label="Work telephone" htmlFor={`c-phone-${id}`}>
+          <Input id={`c-phone-${id}`} name="workPhone" value={workPhone} onChange={(e) => setWorkPhone(e.target.value)} maxLength={40} />
+        </Field>
+      </div>
+      <Checkbox name="isPrimary" label="Primary contact" checked={primary} onChange={(e) => setPrimary(e.target.checked)} />
+      {values && <Checkbox name="deactivate" label="Deactivate this contact" checked={deactivate} onChange={(e) => setDeactivate(e.target.checked)} />}
+      <FormError state={banner(state)} />
+      <Button type="submit" variant={values ? "secondary" : "primary"} size="sm" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : values ? "Save contact" : "Add contact"}</Button>
     </form>
   );
 }
@@ -132,7 +224,7 @@ export function WebsiteForm({ clientId, values }: { clientId: string; values?: {
   );
 }
 
-export function ReferenceForm({ clientId, values }: { clientId: string; values?: { id: string; kind: string; label: string; external_identifier: string | null; url: string | null; vault_reference: string | null; notes: string | null; active: boolean } }) {
+export function ReferenceForm({ clientId, staff, values }: { clientId: string; staff: Staff; values?: { id: string; kind: string; label: string; external_identifier: string | null; url: string | null; vault_reference: string | null; notes: string | null; owner_user_id: string | null; active: boolean } }) {
   const [state, action, pending] = useActionState(saveReferenceAction, null);
   const [kind, setKind] = useState(values?.kind ?? "other");
   const [refLabel, setRefLabel] = useState(values?.label ?? "");
@@ -140,6 +232,7 @@ export function ReferenceForm({ clientId, values }: { clientId: string; values?:
   const [url, setUrl] = useState(values?.url ?? "");
   const [vault, setVault] = useState(values?.vault_reference ?? "");
   const [notes, setNotes] = useState(values?.notes ?? "");
+  const [owner, setOwner] = useState(values?.owner_user_id ?? "");
   const [deactivate, setDeactivate] = useState(values ? !values.active : false);
   const err = (f: string) => (state && !state.ok && state.field === f ? state.error : null);
   const k = values?.id ?? "new";
@@ -164,8 +257,11 @@ export function ReferenceForm({ clientId, values }: { clientId: string; values?:
         <Field label="Link" htmlFor={`r-url-${k}`} error={err("url")}>
           <Input id={`r-url-${k}`} name="url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" {...describedBy(`r-url-${k}`, err("url"))} />
         </Field>
-        <Field label="Vault reference" htmlFor={`r-vault-${k}`} hint="Where the credential lives, for example vault://clinic-genie/client/ga4.">
+        <Field label="Vault reference" htmlFor={`r-vault-${k}`} hint="Where the credential lives, for example vault://clinic-genie/client/ga4. The secret itself is not stored here.">
           <Input id={`r-vault-${k}`} name="vaultReference" value={vault} onChange={(e) => setVault(e.target.value)} maxLength={200} />
+        </Field>
+        <Field label="Account owner" htmlFor={`r-owner-${k}`} hint="Staff member who looks after this account.">
+          <StaffSelect id={`r-owner-${k}`} name="ownerUserId" value={owner} onChange={setOwner} staff={staff} />
         </Field>
       </div>
       <Field label="Notes" htmlFor={`r-notes-${k}`}>

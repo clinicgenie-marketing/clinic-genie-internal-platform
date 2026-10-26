@@ -7,8 +7,10 @@ import { LinkButton } from "@/components/ui/Button";
 import { FilterBar, FilterSelect } from "@/components/ui/Filters";
 import { SeoPageTable } from "@/components/modules/SeoList";
 import { label } from "@/components/ui/Badge";
-import { Notice } from "@/components/ui/Notice";
+import { EmptyState, Notice } from "@/components/ui/Notice";
 import Link from "next/link";
+import { clientLabel } from "@/lib/client-label";
+import { SeoSubnav } from "@/components/modules/SeoSubnav";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "SEO" };
@@ -23,30 +25,45 @@ export default async function SeoPage({ searchParams }: { searchParams: Promise<
     clients: await listClients(db),
   }));
   const canCreate = data.clients.some((c) => canEditClient(access, c.id));
+  const hasFilters = Boolean(client || status || flagged);
   return (
     <>
-      <PageHeader title="SEO content and search mapping" description="Which page targets which search, its content status and review dates, with before and after change records." action={canCreate ? <LinkButton href="/seo/new">Map a page</LinkButton> : undefined} />
+      <PageHeader title="SEO content and search mapping" description="Which page targets which search, its content status and review dates, with before and after change records." action={canCreate && (data.pages.length > 0 || hasFilters) ? <LinkButton href="/seo/new">Map a page</LinkButton> : undefined} />
+      <SeoSubnav pathname="/seo" />
       <Notice tone="neutral">Mapping flags and statuses are entered by staff. The platform has not crawled or verified any site.</Notice>
-      <div className="mt-4">
-        <FilterBar>
-          <FilterSelect name="client" label="Client" value={client} options={data.clients.map((c) => ({ value: c.id, label: c.name }))} />
-          <FilterSelect name="status" label="Content status" value={status} options={CONTENT_STATUSES.map((s) => ({ value: s, label: label(s) }))} />
-          <FilterSelect name="flagged" label="Mapping" value={flagged} allLabel="All pages" options={[{ value: "1", label: "Flagged only" }]} />
-        </FilterBar>
-      </div>
-      <Card><SeoPageTable pages={data.pages} today={today} /></Card>
-      <Card className="mt-6">
-        <CardHeader title="Changes awaiting verification" description="Recorded changes with no verification date yet." />
-        <ul className="divide-y divide-line">
-          {data.unverified.length === 0 && <li className="px-5 py-3 text-sm text-muted">Every recorded change has been verified.</li>}
-          {data.unverified.map((c) => (
-            <li key={c.id} className="px-5 py-2.5 text-sm">
-              <Link href={`/seo/pages/${c.seo_page_id}`} className="text-action hover:underline">{c.page_path}</Link>: {label(c.change_type)} on {formatDate(c.changed_on)} by {c.changed_by_name}
-              <div className="text-xs text-muted">{c.reason}</div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {data.pages.length === 0 && !hasFilters ? (
+        <div className="mt-6">
+          <EmptyState
+            title="No SEO pages mapped yet"
+            action={canCreate ? <LinkButton href="/seo/new">Map your first page</LinkButton> : undefined}
+          >
+            Start by mapping a client page to its target search, content status, and review schedule.
+          </EmptyState>
+        </div>
+      ) : (
+        <>
+          <div className="mt-4">
+            <FilterBar>
+              <FilterSelect name="client" label="Client" value={client} options={data.clients.map((c) => ({ value: c.id, label: clientLabel(c) }))} />
+              <FilterSelect name="status" label="Content status" value={status} options={CONTENT_STATUSES.map((s) => ({ value: s, label: label(s) }))} />
+              <FilterSelect name="flagged" label="Mapping" value={flagged} allLabel="All pages" options={[{ value: "1", label: "Flagged only" }]} />
+            </FilterBar>
+          </div>
+          <Card><SeoPageTable pages={data.pages} today={today} emptyMessage="No pages match these filters." /></Card>
+          <Card className="mt-6">
+            <CardHeader title="Changes awaiting verification" description="Recorded changes with no verification date yet." />
+            <ul className="divide-y divide-line">
+              {data.unverified.length === 0 && <li className="px-5 py-3 text-sm text-muted">Every recorded change has been verified.</li>}
+              {data.unverified.map((c) => (
+                <li key={c.id} className="px-5 py-2.5 text-sm">
+                  <Link href={`/seo/pages/${c.seo_page_id}`} className="text-action hover:underline">{c.page_path}</Link>: {label(c.change_type)} on {formatDate(c.changed_on)} by {c.changed_by_name}
+                  <div className="text-xs text-muted">{c.reason}</div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
     </>
   );
 }

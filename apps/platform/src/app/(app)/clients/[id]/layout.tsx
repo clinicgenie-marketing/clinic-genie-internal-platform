@@ -15,13 +15,18 @@ export default async function ClientLayout({ params, children }: { params: Promi
   return (
     <>
       <div className="mb-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-muted"><Link href="/clients" className="hover:underline">Clients</Link></div>
-        <div className="flex flex-wrap items-center gap-2 mt-1">
-          <h1 className="text-2xl font-semibold leading-tight">{client.name}</h1>
-          {client.status === "archived" && <Badge tone="neutral">Archived</Badge>}
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"><Link href="/clients" className="hover:text-action">Clients</Link></div>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <h1 className="text-[1.65rem] font-semibold leading-tight tracking-tight">{client.name}</h1>
+          <Badge tone={client.status === "active" ? "good" : "neutral"}>{client.status === "active" ? "Active" : "Inactive"}</Badge>
           {client.is_synthetic && <Badge tone="warn">Demonstration data</Badge>}
         </div>
-        <div className="text-sm text-muted mt-1">Accountable owner: {client.owner_name ?? "Unassigned"}</div>
+        <div className="text-sm text-muted mt-1">
+          {client.reference_number ? `${client.reference_number} · ` : ""}
+          {client.short_code ? `${client.short_code} · ` : ""}
+          {client.specialty ? `${client.specialty} · ` : ""}
+          Clinic Genie owner: {client.owner_name ?? "Unassigned"}
+        </div>
       </div>
       <ClientTabs clientId={id} />
       {children}

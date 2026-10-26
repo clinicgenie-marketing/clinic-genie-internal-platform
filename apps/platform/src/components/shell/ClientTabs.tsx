@@ -5,12 +5,7 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   ["", "Overview"],
-  ["/tasks", "Tasks"],
   ["/approvals", "Approvals"],
-  ["/seo", "SEO"],
-  ["/google-ads", "Google Ads"],
-  ["/issues", "Issues"],
-  ["/medical-review", "Medical review"],
   ["/reports", "Reports"],
   ["/timeline", "Timeline"],
   ["/profile", "Profile"],
@@ -20,14 +15,14 @@ export function ClientTabs({ clientId }: { clientId: string }) {
   const pathname = usePathname();
   const base = `/clients/${clientId}`;
   return (
-    <nav aria-label="Client sections" className="mb-6 -mx-4 px-4 overflow-x-auto">
-      <ul className="flex gap-1 border-b border-line min-w-max">
+    <nav aria-label="Client sections" className="mb-6 -mx-4 overflow-x-auto px-4">
+      <ul className="flex min-w-max gap-1">
         {TABS.map(([suffix, name]) => {
           const href = `${base}${suffix}`;
           const active = suffix === "" ? pathname === base : pathname.startsWith(href);
           return (
             <li key={suffix}>
-              <Link href={href} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 items-center px-3 text-sm font-medium border-b-2 -mb-px ${active ? "border-action text-action" : "border-transparent text-ink-soft hover:text-ink hover:border-line-strong"}`}>
+              <Link href={href} aria-current={active ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-medium ${active ? "bg-brand-pale text-ink" : "text-ink-soft hover:bg-brand-pale/70 hover:text-ink"}`}>
                 {name}
               </Link>
             </li>

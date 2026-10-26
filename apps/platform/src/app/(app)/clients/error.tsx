@@ -8,7 +8,7 @@ export default function ClientsError({ error, reset }: { error: Error & { digest
     console.error(error);
   }, [error]);
   return (
-    <div role="alert" className="rounded-md border border-bad/30 bg-bad-bg px-4 py-3 text-sm">
+    <div role="alert" className="rounded-2xl bg-bad-bg px-4 py-3 text-sm">
       <p className="font-semibold text-bad">This page could not be loaded</p>
       <p className="mt-1 text-ink">Nothing was saved. Check that the local database is running, then try again.</p>
       <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={() => reset()}>

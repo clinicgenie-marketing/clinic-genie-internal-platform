@@ -17,7 +17,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     "use server";
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     await signIn("dev-link", { email, redirect: false, redirectTo: "/" });
-    redirect("/sign-in?sent=1");
+    redirect("/dev/magic-links");
   }
   async function google() {
     "use server";
@@ -27,11 +27,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   return (
     <main className="min-h-dvh flex items-center justify-center px-4 py-12">
       <div className="card w-full max-w-md p-8">
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3">
           <img src="/brandmark.svg" alt="" width={36} height={36} />
-          <div>
-            <h1 className="text-xl font-semibold">Clinic Genie</h1>
-            <p className="text-sm text-muted">Staff sign in</p>
+          <div className="leading-tight">
+            <h1 className="text-xl font-semibold tracking-tight">Genie Works</h1>
+            <p className="text-[11px] italic text-muted">Internal Platform for Genies</p>
           </div>
         </div>
         {error && <Notice tone="bad" title="Sign in was not completed">{error === "AccessDenied" ? "This email is not an active staff account." : "Please try again or contact an administrator."}</Notice>}
