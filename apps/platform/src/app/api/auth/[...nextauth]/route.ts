@@ -6,7 +6,7 @@ function withDebugCookie(request: NextRequest, response: Response): Response {
   if (!token) return response;
   const headers = new Headers(response.headers);
   const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  headers.append("set-cookie", `gw_dbg=${token}; Path=/; Max-Age=180; SameSite=Lax${secure}`);
+  headers.append("set-cookie", `gw_dbg=${encodeURIComponent(token)}; Path=/; Max-Age=180; SameSite=Lax${secure}`);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 

@@ -49,8 +49,24 @@ function debugAuth(hypothesisId: string, location: string, message: string, data
 function authFailureToken(error: unknown): string {
   const record = error as { type?: unknown; name?: unknown; cause?: { code?: unknown; err?: { code?: unknown; name?: unknown; cause?: { code?: unknown } } } };
   const type = String(record?.type || record?.name || "unknown").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40);
-  const code = String(record?.cause?.err?.code || record?.cause?.err?.cause?.code || record?.cause?.code || record?.cause?.err?.name || "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 24);
-  return `${type}:${code}`;
+  const code = String(record?.cause?.err?.code || record?.cause?.err?.cause?.code || record?.cause?.code || record?.cause?.err?.name || "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 40);
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  const walk = (value: unknown, depth: number) => {
+    if (!value || depth > 5 || seen.has(value) || typeof value !== "object") return;
+    seen.add(value);
+    const item = value as { message?: unknown; error?: unknown; error_description?: unknown; body?: { error?: unknown; error_description?: unknown }; cause?: unknown; err?: unknown };
+    if (typeof item.message === "string") parts.push(item.message);
+    if (typeof item.error === "string") parts.push(item.error);
+    if (typeof item.error_description === "string") parts.push(item.error_description);
+    if (typeof item.body?.error === "string") parts.push(item.body.error);
+    if (typeof item.body?.error_description === "string") parts.push(item.body.error_description);
+    walk(item.cause, depth + 1);
+    walk(item.err, depth + 1);
+  };
+  walk(error, 0);
+  const detail = parts.join(" ").replace(/[A-Za-z0-9_-]{24,}/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+  return `${type}:${code}:${detail}`;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
