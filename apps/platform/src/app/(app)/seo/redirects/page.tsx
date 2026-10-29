@@ -1,79 +1,72 @@
-import { canEditClient, listClients, listSeoRedirects, listWebsites } from "@clinic-genie/db";
 import { requireAccess } from "@/lib/session";
-import { staffTx } from "@/lib/db";
-import { PageHeader, Card, CardHeader } from "@/components/ui/Card";
-import { EmptyState, Notice } from "@/components/ui/Notice";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { Notice } from "@/components/ui/Notice";
 import { SeoRedirectForm } from "@/components/modules/SeoSoftLaunchForms";
-import { SeoSubnav } from "@/components/modules/SeoSubnav";
-import { Field, Select } from "@/components/ui/Field";
-import { FilterInput } from "@/components/ui/Filters";
-import { Button } from "@/components/ui/Button";
-import { clientLabel } from "@/lib/client-label";
+import { SeoFrame, Unavailable } from "@/components/modules/seo/SeoFrame";
+import { DemoNote } from "@/components/modules/seo/OverviewPanels";
+import { loadSeoContext, loadWebsiteSeo, queryText, selectedTab, type SeoSearch } from "@/lib/seo-workspace";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "SEO 301 redirects" };
+export const metadata = { title: "URL redirects" };
 
-export default async function SeoRedirectsPage({ searchParams }: { searchParams: Promise<{ client?: string; website?: string; q?: string }> }) {
+const TABS = [
+  ["redirects", "Redirects"],
+  ["import", "Import & Export"],
+  ["migration", "Migration"],
+] as const;
+
+export default async function SeoRedirectsPage({ searchParams }: { searchParams: Promise<SeoSearch> }) {
   const access = await requireAccess();
-  const { client, website, q } = await searchParams;
-  const data = await staffTx(access, async (db) => {
-    const clients = (await listClients(db)).filter((item) => canEditClient(access, item.id));
-    const sites = (await Promise.all(clients.map(async (item) => (await listWebsites(db, item.id))
-      .filter((site) => site.status === "active")
-      .filter((site) => site.platform.toLowerCase().includes("next"))
-      .map((site) => ({ ...site, clientName: clientLabel(item) }))))).flat();
-    const selected = sites.find((site) => site.id === website && site.client_id === client);
-    const redirects = selected ? await listSeoRedirects(db, { clientId: selected.client_id, websiteId: selected.id, search: q, includeInactive: true }) : [];
-    return { clients, sites, selected, redirects };
-  });
-
+  const query = await searchParams;
+  const ctx = await loadSeoContext(access, query);
+  const bundle = ctx.selected ? await loadWebsiteSeo(access, ctx.selected) : null;
+  const tab = selectedTab(queryText(query, "tab"), TABS, "redirects");
+  const q = queryText(query, "q")?.toLowerCase();
+  const rules = (bundle?.redirects ?? []).filter((rule) => !q || rule.source_path.toLowerCase().includes(q) || rule.destination_path.toLowerCase().includes(q));
+  const codeManaged = ctx.selected?.platform.toLowerCase().includes("next") ?? false;
   return (
-    <>
-      <PageHeader title="URL redirect manager" description="Create and edit individual permanent 301 redirects for supported, connected websites." />
-      <SeoSubnav pathname="/seo/redirects" />
-      <Notice tone="neutral">Only local paths are accepted. Self-redirects and redirect chains that loop are rejected. Redirect changes reach connected Next.js clinic sites through the published settings API; Wix and other external platforms are not edited.</Notice>
-      <Card className="my-5 p-5">
-        <form method="get" className="flex flex-wrap items-end gap-3">
-          <Field label="Client" htmlFor="client">
-            <Select id="client" name="client" defaultValue={client ?? ""}>
-              <option value="">Choose client</option>
-              {data.clients.map((item) => <option key={item.id} value={item.id}>{clientLabel(item)}</option>)}
-            </Select>
-          </Field>
-          <Field label="Website" htmlFor="website">
-            <Select id="website" name="website" defaultValue={website ?? ""} required>
-              <option value="">Choose website</option>
-              {data.sites.filter((site) => !client || site.client_id === client).map((site) => (
-                <option key={site.id} value={site.id}>{site.clientName} · {site.name}</option>
-              ))}
-            </Select>
-          </Field>
-          <FilterInput name="q" label="Search from/to paths" value={q} />
-          <Button type="submit" variant="secondary" size="sm">Show redirects</Button>
-        </form>
-      </Card>
-      {!data.selected ? (
-        <EmptyState title={data.sites.length ? "Choose a supported website" : "No connected-platform websites"}>Individual redirects can be published only to active websites marked as Next.js. Wix and other external platforms are not assumed to be editable here.</EmptyState>
-      ) : (
+    <SeoFrame ctx={ctx} pathname="/seo/redirects" title="URL Redirects" description="Keep individual permanent redirects understandable. Imports and live tests do not run from this screen." tabs={TABS} currentTab={tab}>
+      {ctx.demo ? <DemoNote>No sample redirects are listed.</DemoNote> : !codeManaged && ctx.selected ? (
+        <Unavailable title="This website platform is not editable here">Individual redirects are published only to active Next.js websites. Wix and other platforms are not changed.</Unavailable>
+      ) : bundle && tab === "redirects" ? (
         <>
-          <Card className="mb-6">
-            <CardHeader title={`Add a redirect for ${data.selected.name}`} description="The destination must be a path on the same website. New rules use HTTP 301." />
-            <div className="px-5 pb-5"><SeoRedirectForm clientId={data.selected.client_id} websiteId={data.selected.id} /></div>
-          </Card>
-          <Card>
-            <CardHeader title="Redirects" description={`${data.redirects.length} matching rules. Search matches either path.`} />
-            {data.redirects.length === 0 ? (
-              <p className="px-5 pb-5 text-sm text-muted">{q ? "No redirects match that search." : "No redirects configured for this website."}</p>
-            ) : (
-              <div className="space-y-3 px-5 pb-5">
-                {data.redirects.map((rule) => (
-                  <SeoRedirectForm key={rule.id} clientId={rule.client_id} websiteId={rule.website_id} redirect={rule} />
-                ))}
+          <Notice tone="neutral">Only local paths are accepted. Self-redirects and loops are rejected when you save. A saved rule reaches a connected Next.js site through the settings API; this screen does not call the live URL.</Notice>
+          {bundle.canPublish && (
+            <Card className="my-5" >
+              <CardHeader title="Add a redirect" description="Permanent 301 is the supported type. Temporary redirects are not implemented." />
+              <div id="new-redirect" className="px-5 pb-5">
+                <SeoRedirectForm clientId={ctx.selected!.clientId} websiteId={ctx.selected!.id} initialSource={queryText(query, "from") ?? ""} initialDestination={queryText(query, "to") ?? ""} />
               </div>
-            )}
+            </Card>
+          )}
+          <Card>
+            <CardHeader title="Redirects" description={`${rules.length} matching rules.`} />
+            <form method="get" className="px-5 pb-4">
+              <input type="hidden" name="client" value={ctx.client} />
+              <input type="hidden" name="website" value={ctx.website} />
+              <input type="hidden" name="tab" value="redirects" />
+              <label className="text-xs text-muted">Search paths <input name="q" defaultValue={queryText(query, "q")} className="mt-1 block min-h-10 w-full max-w-sm rounded-xl border border-line px-3" /></label>
+            </form>
+            <div className="space-y-3 px-5 pb-5">
+              {rules.length === 0 && <p className="text-sm text-muted">No redirects match this website.</p>}
+              {rules.map((rule) => (
+                <div key={rule.id}>
+                  <p className="mb-1 text-xs text-muted">{rule.active ? "Saved and active" : "Saved and inactive"} · Live test: not run · Pattern rules are under Advanced and are not available.</p>
+                  {bundle.canPublish ? <SeoRedirectForm clientId={rule.client_id} websiteId={rule.website_id} redirect={rule} /> : <p className="text-sm">{rule.source_path} → {rule.destination_path}</p>}
+                </div>
+              ))}
+            </div>
+            <details className="px-5 pb-5 text-sm">
+              <summary className="cursor-pointer font-medium">Advanced redirect</summary>
+              <p className="mt-2 text-muted">Group and pattern rules, precedence previews and chain detection beyond the current save-time loop check are not available. Adding one here would not publish it.</p>
+            </details>
           </Card>
         </>
+      ) : tab === "import" ? (
+        <Unavailable title="Import and export are not available">A CSV will not be accepted or applied. Download, dry-run and export actions are withheld so they cannot report a false success.</Unavailable>
+      ) : (
+        <Unavailable title="Migration inventory is not connected">Old URL decisions such as Keep, Redirect, Retire and Review need a source inventory. None has been imported, and no launch check has been run.</Unavailable>
       )}
-    </>
+    </SeoFrame>
   );
 }

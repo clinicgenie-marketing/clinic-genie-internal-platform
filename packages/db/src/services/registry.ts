@@ -11,6 +11,7 @@ export interface ClientRow {
   owner_user_id: string | null;
   owner_name: string | null;
   channels: ClientChannel[];
+  services: string | null;
   is_synthetic: boolean;
   notes: string | null;
   reference_number: string | null;
@@ -163,6 +164,14 @@ export async function getClient(db: Queryable, id: string): Promise<ClientRow | 
   return rows[0] ?? null;
 }
 
+/** Active clients, plus an explicitly requested client when that record is visible. An unknown id stays absent so callers can deny it. */
+export async function listClientsForRequest(db: Queryable, requestedId?: string | null): Promise<ClientRow[]> {
+  const clients = await listClients(db);
+  if (!requestedId || clients.some((client) => client.id === requestedId)) return clients;
+  const requested = await getClient(db, requestedId);
+  return requested ? [requested, ...clients] : clients;
+}
+
 export async function getClientBySlug(db: Queryable, slug: string): Promise<ClientRow | null> {
   const { rows } = await db.query<ClientRow>(`${CLIENT_SELECT} where c.slug = $1`, [slug]);
   return rows[0] ?? null;
@@ -173,6 +182,7 @@ export interface ClientInput {
   name: string;
   ownerUserId: string | null;
   channels: ClientChannel[];
+  services?: string | null;
   isSynthetic: boolean;
   notes: string | null;
   referenceNumber?: string | null;
@@ -191,12 +201,12 @@ export interface ClientInput {
 export async function createClient(db: Queryable, input: ClientInput, actorUserId: string): Promise<ClientRow> {
   const { rows } = await db.query<{ id: string }>(
     `insert into clients (
-       slug, name, owner_user_id, channels, is_synthetic, notes,
+       slug, name, owner_user_id, channels, services, is_synthetic, notes,
        reference_number, short_code, specialty, legal_name, public_name, address, contact_email, contact_phone,
        enquiry_owner_user_id, notification_owner_user_id, administration_owner_user_id, created_by, updated_by
-     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$18) returning id`,
+     ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19) returning id`,
     [
-      input.slug, input.name, input.ownerUserId, input.channels, input.isSynthetic, input.notes,
+      input.slug, input.name, input.ownerUserId, input.channels, cleanServices(input.services), input.isSynthetic, input.notes,
       input.referenceNumber ?? null, input.shortCode ?? null, input.specialty ?? null, input.legalName ?? null, input.publicName ?? null, input.address ?? null, input.contactEmail ?? null, input.contactPhone ?? null,
       input.enquiryOwnerUserId ?? null, input.notificationOwnerUserId ?? null, input.administrationOwnerUserId ?? null, actorUserId,
     ],
@@ -208,20 +218,27 @@ export async function createClient(db: Queryable, input: ClientInput, actorUserI
 }
 
 export async function updateClient(db: Queryable, id: string, input: Omit<ClientInput, "slug" | "isSynthetic">, actorUserId: string): Promise<void> {
-  await db.query(
+  const { rowCount } = await db.query(
     `update clients set
-       name = $2, owner_user_id = $3, channels = $4, notes = $5,
-       reference_number = $6, short_code = $7, specialty = $8, legal_name = $9, public_name = $10, address = $11, contact_email = $12, contact_phone = $13,
-       enquiry_owner_user_id = $14, notification_owner_user_id = $15, administration_owner_user_id = $16,
-       updated_by = $17, updated_at = now()
+       name = $2, owner_user_id = $3, channels = $4, services = $5, notes = $6,
+       reference_number = $7, short_code = $8, specialty = $9, legal_name = $10, public_name = $11, address = $12, contact_email = $13, contact_phone = $14,
+       enquiry_owner_user_id = $15, notification_owner_user_id = $16, administration_owner_user_id = $17,
+       updated_by = $18, updated_at = now()
      where id = $1`,
     [
-      id, input.name, input.ownerUserId, input.channels, input.notes,
+      id, input.name, input.ownerUserId, input.channels, cleanServices(input.services), input.notes,
       input.referenceNumber ?? null, input.shortCode ?? null, input.specialty ?? null, input.legalName ?? null, input.publicName ?? null, input.address ?? null, input.contactEmail ?? null, input.contactPhone ?? null,
       input.enquiryOwnerUserId ?? null, input.notificationOwnerUserId ?? null, input.administrationOwnerUserId ?? null, actorUserId,
     ],
   );
-  await recordAudit(db, { actorType: "staff", actorUserId, action: "client.update", targetType: "client", targetId: id, clientId: id, outcome: "success", metadata: { fields: ["profile", "owner", "operational_contacts"] } });
+  if (!rowCount) throw new RegistryRuleError("Client was not saved. You may not have permission to change it.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client.update", targetType: "client", targetId: id, clientId: id, outcome: "success", metadata: { fields: ["profile", "services", "owner", "operational_contacts"] } });
+}
+
+function cleanServices(value: string | null | undefined): string | null {
+  const text = value?.trim() || null;
+  if (text && text.length > 2000) throw new RegistryRuleError("Services must be 2000 characters or fewer.");
+  return text;
 }
 
 /** Soft archive. Every linked record is retained. */
@@ -244,6 +261,14 @@ export async function listWebsites(db: Queryable, clientId: string): Promise<Web
   return rows;
 }
 
+/** The stored client owns the website. A caller-supplied client id cannot replace it. */
+export async function requireWebsiteForClient(db: Queryable, websiteId: string, clientId: string): Promise<WebsiteRow> {
+  const { rows } = await db.query<WebsiteRow>("select * from websites where id = $1 and client_id = $2", [websiteId, clientId]);
+  const site = rows[0];
+  if (!site) throw new RegistryRuleError("That website is not available for this client.");
+  return site;
+}
+
 export async function createWebsite(
   db: Queryable,
   input: { clientId: string; name: string; url: string | null; platform: string; environment: WebsiteRow["environment"]; notes: string | null },
@@ -253,8 +278,10 @@ export async function createWebsite(
     "insert into websites (client_id, name, url, platform, environment, notes) values ($1, $2, $3, $4, $5, $6) returning *",
     [input.clientId, input.name, input.url, input.platform, input.environment, input.notes],
   );
-  await recordAudit(db, { actorType: "staff", actorUserId, action: "website.create", targetType: "website", targetId: rows[0]!.id, clientId: input.clientId, outcome: "success", metadata: { environment: input.environment } });
-  return rows[0]!;
+  const site = rows[0];
+  if (!site) throw new RegistryRuleError("Website was not saved. You may not have permission to change it.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "website.create", targetType: "website", targetId: site.id, clientId: input.clientId, outcome: "success", metadata: { environment: input.environment } });
+  return site;
 }
 
 export async function updateWebsite(
@@ -270,7 +297,7 @@ export async function updateWebsite(
     [id, input.name, input.url, input.platform, input.environment, input.status, input.notes],
   );
   const site = rows[0];
-  if (!site) return;
+  if (!site) throw new RegistryRuleError("Website was not saved. You may not have permission to change it.");
   await recordAudit(db, { actorType: "staff", actorUserId, action: "website.update", targetType: "website", targetId: id, clientId: site.client_id, outcome: "success", metadata: { status: input.status } });
 }
 
@@ -324,8 +351,10 @@ export async function createAccountReference(db: Queryable, clientId: string, in
      select i.*, u.display_name as owner_name from inserted i left join staff_users u on u.id = i.owner_user_id`,
     [clientId, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes, input.ownerUserId ?? null],
   );
-  await recordAudit(db, { actorType: "staff", actorUserId, action: "account_reference.create", targetType: "account_reference", targetId: rows[0]!.id, clientId, outcome: "success", metadata: { kind: input.kind } });
-  return rows[0]!;
+  const created = rows[0];
+  if (!created) throw new RegistryRuleError("Reference was not saved. You may not have permission to change it.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "account_reference.create", targetType: "account_reference", targetId: created.id, clientId, outcome: "success", metadata: { kind: input.kind } });
+  return created;
 }
 
 export async function updateAccountReference(db: Queryable, id: string, input: AccountReferenceInput & { active: boolean }, actorUserId: string): Promise<void> {
@@ -339,7 +368,7 @@ export async function updateAccountReference(db: Queryable, id: string, input: A
     [id, input.kind, input.label, input.externalIdentifier, input.url, input.vaultReference, input.notes, input.active, input.ownerUserId ?? null],
   );
   const ref = rows[0];
-  if (!ref) return;
+  if (!ref) throw new RegistryRuleError("Reference was not saved. You may not have permission to change it.");
   await recordAudit(db, { actorType: "staff", actorUserId, action: "account_reference.update", targetType: "account_reference", targetId: id, clientId: ref.client_id, outcome: "success", metadata: { kind: input.kind, active: input.active } });
 }
 
@@ -420,15 +449,17 @@ export async function updateOwnName(db: Queryable, userId: string, displayName: 
   await recordAudit(db, { actorType: "staff", actorUserId: userId, action: "staff.update", targetType: "staff_user", targetId: userId, outcome: "success", metadata: { fields: ["display_name"] } });
 }
 
-export async function updateStaff(db: Queryable, userId: string, input: { displayName: string; role: PlatformRole; active: boolean }, actorUserId: string): Promise<void> {
+export async function updateStaff(db: Queryable, userId: string, input: { displayName: string; role: PlatformRole; active: boolean }, actorUserId: string): Promise<{ sessionsRevoked: number }> {
   const before = (await db.query<{ platform_role: string; active: boolean }>("select platform_role, active from staff_users where id = $1", [userId])).rows[0];
-  await db.query(
+  const { rowCount } = await db.query(
     "update staff_users set display_name = $2, platform_role = $3, active = $4, deactivated_at = case when $4 then null else coalesce(deactivated_at, now()) end where id = $1",
     [userId, input.displayName.trim(), input.role, input.active],
   );
+  if (!rowCount) throw new RegistryRuleError("Staff record was not changed.");
+  let sessionsRevoked = 0;
   if (!input.active) {
-    // Revoke live sessions promptly so a deactivated user cannot keep working.
-    await db.query(`delete from sessions where "userId" in (select id from users where lower(email) = (select email from staff_users where id = $1))`, [userId]);
+    const removed = await db.query<{ revoked: number }>("select revoke_staff_sessions($1) as revoked", [userId]);
+    sessionsRevoked = removed.rows[0]?.revoked ?? 0;
   }
   await recordAudit(db, {
     actorType: "staff",
@@ -437,8 +468,9 @@ export async function updateStaff(db: Queryable, userId: string, input: { displa
     targetType: "staff_user",
     targetId: userId,
     outcome: "success",
-    metadata: { roleFrom: before?.platform_role, roleTo: input.role, activeFrom: before?.active, activeTo: input.active },
+    metadata: { roleFrom: before?.platform_role, roleTo: input.role, activeFrom: before?.active, activeTo: input.active, sessionsRevoked },
   });
+  return { sessionsRevoked };
 }
 
 export async function listMemberships(db: Queryable, clientId: string): Promise<MembershipRow[]> {
@@ -459,13 +491,70 @@ export async function grantMembership(db: Queryable, input: { userId: string; cl
   const existing = await db.query<{ id: string }>("select id from memberships where user_id = $1 and client_id = $2 and active", [input.userId, input.clientId]);
   if (existing.rows[0]) return existing.rows[0].id;
   const { rows } = await db.query<{ id: string }>("insert into memberships (user_id, client_id, granted_by) values ($1, $2, $3) returning id", [input.userId, input.clientId, actorUserId]);
-  await recordAudit(db, { actorType: actorUserId ? "staff" : "system", actorUserId, action: "membership.grant", targetType: "membership", targetId: rows[0]!.id, clientId: input.clientId, outcome: "success", metadata: { userId: input.userId } });
-  return rows[0]!.id;
+  const id = rows[0]?.id;
+  if (!id) throw new RegistryRuleError("That assignment was not saved.");
+  await recordAudit(db, { actorType: actorUserId ? "staff" : "system", actorUserId, action: "membership.grant", targetType: "membership", targetId: id, clientId: input.clientId, outcome: "success", metadata: { userId: input.userId } });
+  return id;
 }
 
-export async function revokeMembership(db: Queryable, membershipId: string, actorUserId: string): Promise<void> {
+export async function revokeMembership(db: Queryable, membershipId: string, actorUserId: string, expectedClientId?: string): Promise<void> {
+  const current = await db.query<{ client_id: string }>("select client_id from memberships where id = $1 and active", [membershipId]);
+  const owner = current.rows[0];
+  if (!owner || (expectedClientId && owner.client_id !== expectedClientId)) throw new RegistryRuleError("That assignment was not changed.");
   const { rows } = await db.query<{ client_id: string; user_id: string }>("update memberships set active = false, revoked_at = now() where id = $1 and active returning client_id, user_id", [membershipId]);
-  const m = rows[0];
-  if (!m) return;
-  await recordAudit(db, { actorType: "staff", actorUserId, action: "membership.revoke", targetType: "membership", targetId: membershipId, clientId: m.client_id, outcome: "success", metadata: { userId: m.user_id } });
+  const removed = rows[0];
+  if (!removed) throw new RegistryRuleError("That assignment was not changed.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "membership.revoke", targetType: "membership", targetId: membershipId, clientId: removed.client_id, outcome: "success", metadata: { userId: removed.user_id } });
+}
+
+export interface ClientFileLinkRow {
+  id: string;
+  client_id: string;
+  title: string;
+  url: string;
+  notes: string | null;
+  active: boolean;
+  created_at: Date;
+}
+
+export async function listClientFileLinks(db: Queryable, clientId: string): Promise<ClientFileLinkRow[]> {
+  const { rows } = await db.query<ClientFileLinkRow>(
+    "select id, client_id, title, url, notes, active, created_at from client_file_links where client_id = $1 and active order by created_at, title",
+    [clientId],
+  );
+  return rows;
+}
+
+export function externalFileUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    throw new RegistryRuleError("Enter an https link.");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new RegistryRuleError("Enter an https link without a username or password.");
+  if (parsed.href.length > 2000) throw new RegistryRuleError("That link is too long.");
+  return parsed.href;
+}
+
+export async function createClientFileLink(db: Queryable, clientId: string, input: { title: string; url: string; notes: string | null }, actorUserId: string): Promise<string> {
+  const title = input.title.trim();
+  if (!title || title.length > 160) throw new RegistryRuleError("Enter a title of 160 characters or fewer.");
+  const notes = input.notes?.trim() || null;
+  if (notes && notes.length > 2000) throw new RegistryRuleError("Notes must be 2000 characters or fewer.");
+  const url = externalFileUrl(input.url);
+  const { rows } = await db.query<{ id: string }>(
+    "insert into client_file_links (client_id, title, url, notes, created_by) values ($1, $2, $3, $4, $5) returning id",
+    [clientId, title, url, notes, actorUserId],
+  );
+  const id = rows[0]?.id;
+  if (!id) throw new RegistryRuleError("The file link was not saved.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client_file_link.create", targetType: "client_file_link", targetId: id, clientId, outcome: "success", metadata: { kind: "external_link" } });
+  return id;
+}
+
+export async function archiveClientFileLink(db: Queryable, id: string, clientId: string, actorUserId: string): Promise<void> {
+  const { rowCount } = await db.query("update client_file_links set active = false where id = $1 and client_id = $2 and active", [id, clientId]);
+  if (!rowCount) throw new RegistryRuleError("The file link was not changed.");
+  await recordAudit(db, { actorType: "staff", actorUserId, action: "client_file_link.archive", targetType: "client_file_link", targetId: id, clientId, outcome: "success", metadata: { kind: "external_link" } });
 }

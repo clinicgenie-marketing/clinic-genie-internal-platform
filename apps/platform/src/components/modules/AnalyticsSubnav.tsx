@@ -7,12 +7,12 @@ import { analyticsSearch } from "@/lib/period-options";
 const LINKS = [
   { href: "/analytics", label: "Overview", exact: true },
   { href: "/analytics/traffic", label: "Traffic", exact: false },
-  { href: "/analytics/behavior", label: "Behavior", exact: false },
+  { href: "/analytics/behavior", label: "Behaviour", exact: false },
 ] as const;
 
-export function AnalyticsSubnav({ clientId, range, from, to }: { clientId: string; range: string; from?: string; to?: string }) {
+export function AnalyticsSubnav({ clientId, websiteId, range, from, to }: { clientId: string; websiteId?: string | null; range: string; from?: string; to?: string }) {
   const pathname = usePathname();
-  const query = `?${analyticsSearch(clientId, range, from, to)}`;
+  const query = `?${analyticsSearch(clientId, range, from, to, websiteId ?? undefined)}`;
   return (
     <nav aria-label="Analytics sections" className="mb-6 overflow-x-auto">
       <ul className="flex min-w-max gap-1">

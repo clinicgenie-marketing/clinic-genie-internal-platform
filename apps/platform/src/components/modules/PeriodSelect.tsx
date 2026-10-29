@@ -45,7 +45,7 @@ function ordered(a: string, b: string) {
   return a <= b ? { start: a, end: b } : { start: b, end: a };
 }
 
-export function PeriodSelect({ clientId, range, from, to }: { clientId: string; range: PeriodRangeId; from?: string; to?: string }) {
+export function PeriodSelect({ clientId, websiteId, range, from, to }: { clientId: string; websiteId?: string | null; range: PeriodRangeId; from?: string; to?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const root = useRef<HTMLDivElement>(null);
@@ -59,10 +59,12 @@ export function PeriodSelect({ clientId, range, from, to }: { clientId: string; 
   const [hover, setHover] = useState<string | null>(null);
   const initialMonth = monthKey(applied.start);
   const [visible, setVisible] = useState(initialMonth);
-
-  useEffect(() => {
+  const appliedKey = `${range}|${from ?? ""}|${to ?? ""}`;
+  const [seenKey, setSeenKey] = useState(appliedKey);
+  if (seenKey !== appliedKey) {
+    setSeenKey(appliedKey);
     setOpen(false);
-  }, [range, from, to]);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -135,7 +137,7 @@ export function PeriodSelect({ clientId, range, from, to }: { clientId: string; 
 
   function apply() {
     const nextPreset = matchingPreset(draftStart, draftEnd, today);
-    const query = analyticsSearch(clientId, nextPreset, draftStart, draftEnd);
+    const query = analyticsSearch(clientId, nextPreset, draftStart, draftEnd, websiteId ?? undefined);
     setOpen(false);
     router.push(`${pathname}?${query}`);
   }

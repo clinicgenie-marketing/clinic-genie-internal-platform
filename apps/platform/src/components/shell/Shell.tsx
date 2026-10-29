@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useSyncExternalStore, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Menu, PanelLeft, X, LayoutDashboard, ListChecks, Building2, CheckSquare, Inbox, ClipboardList, Search, Megaphone, AlertTriangle, Stethoscope, BarChart3, LineChart, History, Settings, Shield } from "lucide-react";
 import { TopBar, type TopLink } from "./TopBar";
 
@@ -58,9 +58,9 @@ function NavGroup({ title, items, pathname, collapsed }: { title: string; items:
 
 function Navigation({ workspace, modules, platform, pathname, collapsed }: { workspace: NavItem[]; modules: NavItem[]; platform: NavItem[]; pathname: string; collapsed: boolean }) {
   const groups = [
-    { title: "Main menu", items: workspace },
+    { title: "Main Menu", items: workspace },
     { title: "Work", items: modules },
-    { title: "Platform", items: platform },
+    { title: "Others", items: platform },
   ].filter((group) => group.items.length > 0);
   return (
     <nav aria-label="Main" className={collapsed ? "px-2 py-3" : "px-3 py-4"}>
@@ -78,27 +78,28 @@ const NAV_KEY = "gw-nav";
 const SIDEBAR_WIDTH = 260;
 const RAIL_WIDTH = 72;
 
+function subscribeNav(onStoreChange: () => void) {
+  window.addEventListener("gw-nav", onStoreChange);
+  return () => window.removeEventListener("gw-nav", onStoreChange);
+}
+
+function navCollapsed() {
+  return localStorage.getItem(NAV_KEY) === "closed";
+}
+
 export function Shell({ workspace, modules, platform, header, account, staffName, clients, adds, children }: { workspace: NavItem[]; modules: NavItem[]; platform: NavItem[]; header: ReactNode; account: ReactNode; staffName: string; clients: TopLink[]; adds: TopLink[]; children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const collapsed = useSyncExternalStore(subscribeNav, navCollapsed, () => false);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
-    // Close the mobile menu after navigation without an effect.
     setLastPath(pathname);
     setOpen(false);
   }
 
-  useEffect(() => {
-    if (localStorage.getItem(NAV_KEY) === "closed") setCollapsed(true);
-  }, []);
-
   function toggleNav() {
-    setCollapsed((value) => {
-      const next = !value;
-      localStorage.setItem(NAV_KEY, next ? "closed" : "open");
-      return next;
-    });
+    localStorage.setItem(NAV_KEY, collapsed ? "open" : "closed");
+    window.dispatchEvent(new Event("gw-nav"));
   }
 
   const brand = (mark: number, onClose?: () => void, rail = false) => (

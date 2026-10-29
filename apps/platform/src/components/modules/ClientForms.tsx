@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { ACCOUNT_REFERENCE_KINDS, CLIENT_CHANNELS } from "@clinic-genie/contracts";
-import { createClientAction, saveContactAction, saveReferenceAction, saveWebsiteAction, updateClientAction } from "@/app/actions/clients";
+import { createClientAction, saveContactAction, saveFileLinkAction, saveReferenceAction, saveWebsiteAction, updateClientAction } from "@/app/actions/clients";
 import type { ActionState } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 import { Checkbox, Field, FormError, Input, Select, Textarea } from "@/components/ui/Field";
@@ -33,12 +33,13 @@ function StaffSelect({ id, name, value, onChange, staff }: { id: string; name: s
   );
 }
 
-export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; staff: Staff; values: { clientId?: string; slug?: string; name?: string; ownerUserId?: string | null; channels?: string[]; notes?: string | null; isSynthetic?: boolean; referenceNumber?: string | null; shortCode?: string | null; specialty?: string | null; legalName?: string | null; publicName?: string | null; address?: string | null; contactEmail?: string | null; contactPhone?: string | null; enquiryOwnerUserId?: string | null; notificationOwnerUserId?: string | null; administrationOwnerUserId?: string | null } }) {
+export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; staff: Staff; values: { clientId?: string; slug?: string; name?: string; ownerUserId?: string | null; channels?: string[]; services?: string | null; notes?: string | null; isSynthetic?: boolean; referenceNumber?: string | null; shortCode?: string | null; specialty?: string | null; legalName?: string | null; publicName?: string | null; address?: string | null; contactEmail?: string | null; contactPhone?: string | null; enquiryOwnerUserId?: string | null; notificationOwnerUserId?: string | null; administrationOwnerUserId?: string | null } }) {
   const [state, action, pending] = useActionState(mode === "create" ? createClientAction : updateClientAction, null);
   const [name, setName] = useState(values.name ?? "");
   const [slug, setSlug] = useState(values.slug ?? "");
   const [owner, setOwner] = useState(values.ownerUserId ?? "");
   const [channels, setChannels] = useState(values.channels ?? []);
+  const [services, setServices] = useState(values.services ?? "");
   const [notes, setNotes] = useState(values.notes ?? "");
   const [synthetic, setSynthetic] = useState(Boolean(values.isSynthetic));
   const [referenceNumber, setReferenceNumber] = useState(values.referenceNumber ?? "");
@@ -112,6 +113,9 @@ export function ClientForm({ mode, staff, values }: { mode: "create" | "edit"; s
           </Field>
         </div>
       </fieldset>
+      <Field label="Services" htmlFor="services" hint="A plain description of what the clinic offers. Channel tags below are not the service list.">
+        <Textarea id="services" name="services" value={services} onChange={(e) => setServices(e.target.value)} maxLength={2000} />
+      </Field>
       <fieldset>
         <legend className="text-sm font-medium mb-1">Active channels</legend>
         <div className="flex flex-wrap gap-x-5">
@@ -272,6 +276,30 @@ export function ReferenceForm({ clientId, staff, values }: { clientId: string; s
       )}
       <FormError state={banner(state)} />
       <Button type="submit" variant={values ? "secondary" : "primary"} size="sm" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : values ? "Save reference" : "Add reference"}</Button>
+    </form>
+  );
+}
+
+export function FileLinkForm({ clientId }: { clientId: string }) {
+  const [state, action, pending] = useActionState(saveFileLinkAction, null);
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  return (
+    <form action={action} className="space-y-3">
+      <input type="hidden" name="clientId" value={clientId} />
+      <p className="text-xs text-muted">Save a titled https link. Genie Works controls who can see the link. The site that hosts the file controls who can open it.</p>
+      <Field label="Title" htmlFor="file-title">
+        <Input id="file-title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required />
+      </Field>
+      <Field label="https link" htmlFor="file-url">
+        <Input id="file-url" name="url" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" required />
+      </Field>
+      <Field label="Notes" htmlFor="file-notes">
+        <Textarea id="file-notes" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
+      </Field>
+      <FormError state={banner(state)} />
+      <Button type="submit" variant="secondary" size="sm" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : "Add file link"}</Button>
     </form>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { canEditClient, formatDateTime, formatPeriod, listClients, listSavedReports } from "@clinic-genie/db";
+import { canEditClient, formatDateTime, formatPeriod, listClientsForRequest, listSavedReports, scopeWorkspace } from "@clinic-genie/db";
 import { requireAccess } from "@/lib/session";
 import { staffTx } from "@/lib/db";
 import { PageHeader, Card, CardHeader } from "@/components/ui/Card";
@@ -8,6 +8,7 @@ import { Field, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Table, Td, Th } from "@/components/ui/Table";
 import { clientLabel } from "@/lib/client-label";
+import { Notice } from "@/components/ui/Notice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Reports" };
@@ -16,9 +17,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const access = await requireAccess();
   const { client } = await searchParams;
   const data = await staffTx(access, async (db) => {
-    const clients = await listClients(db);
-    const reports = await listSavedReports(db, client || undefined);
-    return { clients, reports };
+    const clients = await listClientsForRequest(db, client);
+    const selection = scopeWorkspace({ requestedClientId: client, clients, websites: [] });
+    const reports = await listSavedReports(db, selection.clientId ?? undefined);
+    return { clients, reports, selection };
   });
   const canCreate = data.clients.some((item) => canEditClient(access, item.id));
   return (
@@ -28,11 +30,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         description="Prepare, save and export a report. Analytics stays on its own page. Recorded figures are read from the client. A contact click is not shown as an enquiry or an appointment."
         action={canCreate ? <LinkButton href="/reports/new">Create</LinkButton> : undefined}
       />
+      {data.selection.denied && <div className="mb-4"><Notice tone="neutral">That client is not available.</Notice></div>}
       <Card className="mb-4">
         <CardHeader title="Report library" description="Report name, client, reporting period, creator and date created." />
         <form method="get" className="flex flex-wrap items-end gap-3 px-5 pb-4">
           <Field label="Client" htmlFor="client">
-            <Select id="client" name="client" defaultValue={client ?? ""}>
+            <Select id="client" name="client" defaultValue={data.selection.clientId ?? ""}>
               <option value="">All clients</option>
               {data.clients.map((item) => <option key={item.id} value={item.id}>{clientLabel(item)}</option>)}
             </Select>

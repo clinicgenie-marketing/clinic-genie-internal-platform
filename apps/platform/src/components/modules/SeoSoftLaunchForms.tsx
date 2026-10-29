@@ -17,7 +17,7 @@ type PageSetting = { id: string; page_path: string; title: string; description: 
 type Redirect = { id: string; source_path: string; destination_path: string; active: boolean };
 type BusinessProfile = { id: string; branch_name: string; profile_url: string | null; external_identifier: string | null; setup_status: string; notes: string | null };
 
-function SiteConnectionForm({ clientId, website, verificationToken, connected, canManageIntegration }: { clientId: string; website: Site; verificationToken: string | null; connected: boolean; canManageIntegration: boolean }) {
+function SiteConnectionForm({ clientId, website, verificationToken, connected, canManageIntegration, canPublish }: { clientId: string; website: Site; verificationToken: string | null; connected: boolean; canManageIntegration: boolean; canPublish: boolean }) {
   const [state, action, pending] = useActionState(saveGoogleVerificationAction, null);
   const [tokenState, tokenAction, tokenPending] = useActionState(rotateSeoSiteTokenAction, null);
   return (
@@ -25,11 +25,11 @@ function SiteConnectionForm({ clientId, website, verificationToken, connected, c
       <form action={action} className="space-y-3">
         <input type="hidden" name="clientId" value={clientId} />
         <input type="hidden" name="websiteId" value={website.id} />
-        <Field label="Google Search Console HTML verification token" htmlFor={`gsc-${website.id}`} hint="Paste only the content value from Google's google-site-verification meta tag. This publishes the verification tag; it does not verify ownership for you.">
-          <Input id={`gsc-${website.id}`} name="verificationToken" defaultValue={verificationToken ?? ""} maxLength={200} autoComplete="off" />
+        <Field label="Google Search Console HTML verification token" htmlFor={`gsc-${website.id}`} hint="Paste only the content value from Google's google-site-verification meta tag. Saving publishes the verification tag. It does not verify ownership.">
+          <Input id={`gsc-${website.id}`} name="verificationToken" defaultValue={verificationToken ?? ""} maxLength={200} autoComplete="off" disabled={!canPublish} />
         </Field>
         <FormError state={state} />
-        <Button type="submit" variant="secondary" size="sm" disabled={pending}>{pending ? "Saving…" : "Save verification code"}</Button>
+        {canPublish ? <Button type="submit" variant="secondary" size="sm" disabled={pending}>{pending ? "Saving…" : "Save verification code"}</Button> : <p className="text-xs text-muted">Publishing a verification tag stays with an admin or manager.</p>}
       </form>
       <div className="border-t border-line pt-4">
         <h3 className="text-sm font-semibold">Connect this published website</h3>
@@ -86,22 +86,32 @@ function PageSettingForm({ clientId, website, setting }: { clientId: string; web
   );
 }
 
-export function SeoSiteSettingsEditor({ clientId, website, settings, verificationToken, connected, canManageIntegration }: { clientId: string; website: Site; settings: PageSetting[]; verificationToken: string | null; connected: boolean; canManageIntegration: boolean }) {
+export function SeoSiteSettingsEditor({ clientId, website, settings, verificationToken, connected, canManageIntegration, canPublish, section = "all" }: { clientId: string; website: Site; settings: PageSetting[]; verificationToken: string | null; connected: boolean; canManageIntegration: boolean; canPublish: boolean; section?: "all" | "connection" | "pages" }) {
   return (
     <section className="space-y-5">
-      <SiteConnectionForm clientId={clientId} website={website} verificationToken={verificationToken} connected={connected} canManageIntegration={canManageIntegration} />
-      <div className="border-t border-line pt-4">
-        <h3 className="mb-3 text-sm font-semibold">Page titles and descriptions</h3>
-        <div className="space-y-3">
-          {settings.map((setting) => <PageSettingForm key={setting.id} clientId={clientId} website={website} setting={setting} />)}
-          <PageSettingForm clientId={clientId} website={website} />
+      {section !== "pages" && <SiteConnectionForm clientId={clientId} website={website} verificationToken={verificationToken} connected={connected} canManageIntegration={canManageIntegration} canPublish={canPublish} />}
+      {section !== "connection" && (
+        <div className={section === "all" ? "border-t border-line pt-4" : ""}>
+          <h3 className="mb-3 text-sm font-semibold">Page titles and descriptions</h3>
+          {canPublish ? (
+            <div className="space-y-3">
+              {settings.map((setting) => <PageSettingForm key={setting.id} clientId={clientId} website={website} setting={setting} />)}
+              <PageSettingForm clientId={clientId} website={website} />
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm">
+              {settings.length === 0 && <p className="text-muted">No published page settings.</p>}
+              {settings.map((setting) => <p key={setting.id}>{setting.page_path} — {setting.title}</p>)}
+              <p className="text-xs text-muted">Publishing page titles and descriptions stays with an admin or manager.</p>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </section>
   );
 }
 
-export function SeoRedirectForm({ clientId, websiteId, redirect }: { clientId: string; websiteId: string; redirect?: Redirect }) {
+export function SeoRedirectForm({ clientId, websiteId, redirect, initialSource = "", initialDestination = "" }: { clientId: string; websiteId: string; redirect?: Redirect; initialSource?: string; initialDestination?: string }) {
   const [state, action, pending] = useActionState(saveSeoRedirectAction, null);
   const id = redirect?.id ?? "new";
   return (
@@ -110,10 +120,10 @@ export function SeoRedirectForm({ clientId, websiteId, redirect }: { clientId: s
       <input type="hidden" name="websiteId" value={websiteId} />
       {redirect && <input type="hidden" name="redirectId" value={redirect.id} />}
       <Field label="From path" htmlFor={`from-${id}`} required>
-        <Input id={`from-${id}`} name="sourcePath" defaultValue={redirect?.source_path ?? ""} placeholder="/old-page" required maxLength={500} />
+        <Input id={`from-${id}`} name="sourcePath" defaultValue={redirect?.source_path ?? initialSource} placeholder="/old-page" required maxLength={500} />
       </Field>
       <Field label="To path" htmlFor={`to-${id}`} required>
-        <Input id={`to-${id}`} name="destinationPath" defaultValue={redirect?.destination_path ?? ""} placeholder="/new-page" required maxLength={500} />
+        <Input id={`to-${id}`} name="destinationPath" defaultValue={redirect?.destination_path ?? initialDestination} placeholder="/new-page" required maxLength={500} />
       </Field>
       <div className="flex items-center gap-3">
         <Checkbox name="active" label="Active (301)" defaultChecked={redirect?.active ?? true} />

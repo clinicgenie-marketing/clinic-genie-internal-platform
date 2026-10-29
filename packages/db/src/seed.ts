@@ -176,6 +176,31 @@ async function ensurePreviewSnapshots(db: pg.PoolClient): Promise<string[]> {
   return added;
 }
 
+/** Internal agency directory row. Idempotent. Not a clinic client. */
+async function ensureInternalAgencyClient(db: pg.PoolClient): Promise<void> {
+  const existing = await db.query("select 1 from clients where slug = 'clinic-genie' or reference_number = 'CG-000'");
+  if (existing.rows.length) return;
+  const admin = await db.query<{ id: string }>("select id from staff_users where email = 'admin@example.invalid' and active limit 1");
+  const actor = admin.rows[0]?.id;
+  if (!actor) return;
+  await createClient(db, {
+    slug: "clinic-genie",
+    name: "Clinic Genie",
+    ownerUserId: actor,
+    channels: ["website", "seo"],
+    isSynthetic: false,
+    notes: "Internal Clinic Genie record for agency work. Not a clinic client.",
+    referenceNumber: "CG-000",
+    shortCode: "CG",
+    specialty: "Internal agency",
+    legalName: "Clinic Genie",
+    publicName: "Clinic Genie",
+    enquiryOwnerUserId: actor,
+    notificationOwnerUserId: actor,
+    administrationOwnerUserId: actor,
+  }, actor);
+}
+
 export async function seedDemo(pool: pg.Pool, log: (l: string) => void = () => {}): Promise<SeedSummary> {
   const db = await pool.connect();
   try {
@@ -183,6 +208,7 @@ export async function seedDemo(pool: pg.Pool, log: (l: string) => void = () => {
     await db.query("select set_config('app.context', 'service', true)");
     const exists = await db.query("select 1 from clients where slug = 'harbourview-dental'");
     if (exists.rows.length) {
+      await ensureInternalAgencyClient(db);
       const added = await ensurePreviewSnapshots(db);
       const year = await ensureYearAnalytics(db);
       await db.query("commit");
@@ -205,6 +231,7 @@ export async function seedDemo(pool: pg.Pool, log: (l: string) => void = () => {
     const admin = ids.admin!, manager = ids.manager!, specA = ids["specialist-a@example.invalid"]!, specB = ids["specialist-b@example.invalid"]!, reviewer = ids.reviewer!, readonly = ids.read_only!;
 
     // Clients
+    await ensureInternalAgencyClient(db);
     const harbour = await createClient(db, { slug: "harbourview-dental", name: "Harbourview Dental (fictional)", ownerUserId: specA, channels: ["website", "seo", "google_ads"], isSynthetic: true, notes: "Demonstration client. Two-chair general dental practice concept. All figures are synthetic.", specialty: "General dentistry", legalName: "Harbourview Dental Pte. Ltd. (fictional)", publicName: "Harbourview Dental", address: "18 Harbour Road, Singapore (fictional)", contactEmail: "hello@harbourview-dental.example.invalid", contactPhone: "+65 6000 0001", enquiryOwnerUserId: specA, notificationOwnerUserId: specA, administrationOwnerUserId: specA }, admin);
     const meridian = await createClient(db, { slug: "meridian-skin", name: "Meridian Skin Clinic (fictional)", ownerUserId: specA, channels: ["website", "seo", "social"], isSynthetic: true, notes: "Demonstration client. Aesthetic dermatology concept with medical claims under review.", specialty: "Dermatology", legalName: "Meridian Skin Pte. Ltd. (fictional)", publicName: "Meridian Skin Clinic", address: "42 Meridian Avenue, Singapore (fictional)", contactEmail: "hello@meridian-skin.example.invalid", contactPhone: "+65 6000 0002", enquiryOwnerUserId: specA, notificationOwnerUserId: specA, administrationOwnerUserId: specA }, admin);
     const northgate = await createClient(db, { slug: "northgate-physio", name: "Northgate Physio (fictional)", ownerUserId: specB, channels: ["website", "google_ads"], isSynthetic: true, notes: "Demonstration client. Physiotherapy practice concept, onboarding stage.", specialty: "Physiotherapy", legalName: "Northgate Physio Pte. Ltd. (fictional)", publicName: "Northgate Physio", address: "7 Northgate Lane, Singapore (fictional)", contactEmail: "hello@northgate-physio.example.invalid", contactPhone: "+65 6000 0003", enquiryOwnerUserId: specB, notificationOwnerUserId: specB, administrationOwnerUserId: specB }, admin);

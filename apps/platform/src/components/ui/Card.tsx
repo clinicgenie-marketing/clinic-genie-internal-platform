@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-export function Card({ children, className = "", as: Tag = "section" }: { children: ReactNode; className?: string; as?: "section" | "div" | "article" }) {
-  return <Tag className={`card ${className}`}>{children}</Tag>;
+export function Card({ children, className = "", as: Tag = "section", id }: { children: ReactNode; className?: string; as?: "section" | "div" | "article"; id?: string }) {
+  return <Tag id={id} className={`card ${className}`}>{children}</Tag>;
 }
 
 export function CardHeader({ title, action, description }: { title: ReactNode; action?: ReactNode; description?: ReactNode }) {

@@ -82,8 +82,9 @@ export function matchingPreset(start: string, end: string, today = todayIso()): 
   return "custom";
 }
 
-export function analyticsSearch(clientId: string, range: string, from?: string, to?: string): string {
+export function analyticsSearch(clientId: string, range: string, from?: string, to?: string, websiteId?: string): string {
   const params = new URLSearchParams({ client: clientId, range });
+  if (websiteId) params.set("website", websiteId);
   if (range === "custom" && from && to) {
     params.set("from", from);
     params.set("to", to);

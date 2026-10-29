@@ -13,6 +13,7 @@ export function SiteHeader({
   clientReference,
   clientSpecialty,
   websiteUrl,
+  websiteId,
   current,
   previous,
   updatedAt,
@@ -29,6 +30,7 @@ export function SiteHeader({
   clientReference?: string | null;
   clientSpecialty?: string | null;
   websiteUrl: string | null;
+  websiteId?: string | null;
   current?: PeriodWindow;
   previous?: PeriodWindow;
   updatedAt: Date | null;
@@ -55,7 +57,7 @@ export function SiteHeader({
       </div>
       {range && comparedLabel ? (
         <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <PeriodSelect clientId={clientId} range={range} from={from} to={to} />
+          <PeriodSelect clientId={clientId} websiteId={websiteId} range={range} from={from} to={to} />
           <p className="text-sm text-ink-soft">compared to previous period ({comparedLabel})</p>
         </div>
       ) : (

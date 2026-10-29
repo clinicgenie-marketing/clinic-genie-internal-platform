@@ -74,8 +74,14 @@ export const TIMELINE_EVENT_TYPES = [
   "medical_review_decided", "claim_wording_changed",
   "report_snapshot_added", "report_observation_added", "report_saved",
   "client_created", "client_archived",
+  "article_published", "article_unpublished",
+  "article_submitted", "article_approved", "article_returned",
 ] as const;
 export type TimelineEventType = (typeof TIMELINE_EVENT_TYPES)[number];
 
-export const RELATED_RECORD_TYPES = ["task", "approval", "seo_page", "seo_change", "ads_audit", "ads_finding", "ads_change", "issue", "evidence", "medical_claim", "medical_review", "report_snapshot", "website", "account_reference"] as const;
+export const BLOG_STATUSES = ["draft", "in_review", "approved", "published", "archived"] as const;
+export type BlogStatus = (typeof BLOG_STATUSES)[number];
+export const BLOG_LAYOUT = "clinic-article-v1" as const;
+
+export const RELATED_RECORD_TYPES = ["task", "approval", "seo_page", "seo_change", "ads_audit", "ads_finding", "ads_change", "issue", "evidence", "medical_claim", "medical_review", "report_snapshot", "website", "account_reference", "blog_article"] as const;
 export type RelatedRecordType = (typeof RELATED_RECORD_TYPES)[number];

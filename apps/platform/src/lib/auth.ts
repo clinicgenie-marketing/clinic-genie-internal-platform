@@ -37,12 +37,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     /** Identity alone is not access. Only active staff records may sign in. */
     async signIn({ user, account, profile }) {
       const email = user.email?.toLowerCase();
-      if (!email) {
-        // #region agent log
-        fetch("http://127.0.0.1:7777/ingest/d1e6aa15-e325-4576-8252-5cc7335c095b", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4b5b07" }, body: JSON.stringify({ sessionId: "4b5b07", runId: "verify", hypothesisId: "B", location: "apps/platform/src/lib/auth.ts:signIn", message: "sign-in refused before staff lookup", data: { provider: account?.provider ?? null, hasEmail: false }, timestamp: Date.now() }) }).catch(() => {});
-        // #endregion
-        return false;
-      }
+      if (!email) return false;
       let staff = await withContext(SERVICE, (db) => getActiveStaffByEmail(db, email));
       const allowedDomain = process.env.AUTH_GOOGLE_HD?.trim().toLowerCase();
       const domain = email.split("@")[1];
@@ -62,15 +57,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await withContext(SERVICE, (db) =>
           recordAudit(db, { actorType: "public", action: "auth.sign_in", targetType: "staff_user", outcome: "denied", metadata: { reason: "no_active_staff_record", emailDomain: email.split("@")[1] } }),
         );
-        // #region agent log
-        fetch("http://127.0.0.1:7777/ingest/d1e6aa15-e325-4576-8252-5cc7335c095b", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4b5b07" }, body: JSON.stringify({ sessionId: "4b5b07", runId: "verify", hypothesisId: "B", location: "apps/platform/src/lib/auth.ts:signIn", message: "sign-in refused, no active staff", data: { provider: account?.provider ?? null, domain: email.split("@")[1] ?? null, hosted: hosted ?? null, allowedDomain: allowedDomain ?? null }, timestamp: Date.now() }) }).catch(() => {});
-        // #endregion
         return false;
       }
       await withContext(SERVICE, (db) => recordAudit(db, { actorType: "staff", actorUserId: staff.id, action: "auth.sign_in", targetType: "staff_user", targetId: staff.id, outcome: "success" }));
-      // #region agent log
-      fetch("http://127.0.0.1:7777/ingest/d1e6aa15-e325-4576-8252-5cc7335c095b", { method: "POST", headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4b5b07" }, body: JSON.stringify({ sessionId: "4b5b07", runId: "verify", hypothesisId: "B", location: "apps/platform/src/lib/auth.ts:signIn", message: "sign-in allowed", data: { provider: account?.provider ?? null, domain: email.split("@")[1] ?? null }, timestamp: Date.now() }) }).catch(() => {});
-      // #endregion
       return true;
     },
   },

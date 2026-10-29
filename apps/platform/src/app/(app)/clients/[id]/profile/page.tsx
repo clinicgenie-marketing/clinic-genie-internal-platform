@@ -1,9 +1,9 @@
-import { canEditClient, canManageRegistry, formatDateTime, getClient, listAccountReferences, listActiveStaff, listAuditEvents, listClientContacts, listMemberships, listStaff, listWebsites } from "@clinic-genie/db";
+import { canManageAssignments, canManageRegistry, formatDateTime, getClient, listAccountReferences, listActiveStaff, listAuditEvents, listClientContacts, listClientFileLinks, listMemberships, listStaff, listWebsites } from "@clinic-genie/db";
 import { requireClientAccess } from "@/lib/session";
 import { staffTx } from "@/lib/db";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { ClientForm, ContactForm, ReferenceForm, WebsiteForm } from "@/components/modules/ClientForms";
-import { archiveClientAction, membershipAction } from "@/app/actions/clients";
+import { ClientForm, ContactForm, FileLinkForm, ReferenceForm, WebsiteForm } from "@/components/modules/ClientForms";
+import { archiveClientAction, archiveFileLinkAction, membershipAction } from "@/app/actions/clients";
 import { Button } from "@/components/ui/Button";
 import { Badge, label } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
@@ -24,24 +24,26 @@ const HISTORY: Record<string, string> = {
   "membership.revoke": "Removed a staff member",
   "website.create": "Added a website",
   "website.update": "Updated a website",
+  "client_file_link.create": "Added a file link",
+  "client_file_link.archive": "Removed a file link",
 };
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const access = await requireClientAccess(id);
+  const assign = canManageAssignments(access);
   const data = await staffTx(access, async (db) => ({
     client: (await getClient(db, id))!,
     websites: await listWebsites(db, id),
     refs: await listAccountReferences(db, id, true),
     contacts: await listClientContacts(db, id, true),
     members: await listMemberships(db, id),
+    files: await listClientFileLinks(db, id),
     staff: await listActiveStaff(db),
     history: await listAuditEvents(db, { clientId: id, limit: 40 }),
-    allStaff: access.user.platform_role === "admin" ? await listStaff(db) : [],
+    allStaff: assign ? await listStaff(db) : [],
   }));
   const manage = canManageRegistry(access);
-  const edit = canEditClient(access, id);
-  const isAdmin = access.user.platform_role === "admin";
   const nonMembers = data.allStaff.filter((s) => s.active && !data.members.some((m) => m.user_id === s.id));
   const client = data.client;
   return (
@@ -56,6 +58,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
               name: client.name,
               ownerUserId: client.owner_user_id,
               channels: client.channels,
+              services: client.services,
               notes: client.notes,
               referenceNumber: client.reference_number,
               shortCode: client.short_code,
@@ -120,7 +123,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
               {data.members.map((m) => (
                 <li key={m.id} className="flex items-center justify-between gap-3 py-2">
                   <span>{m.user_name} <Badge>{label(m.user_role)}</Badge> <span className="text-xs text-muted">{m.user_email}</span></span>
-                  {isAdmin && (
+                  {assign && (
                     <form action={membershipAction}>
                       <input type="hidden" name="clientId" value={id} />
                       <input type="hidden" name="membershipId" value={m.id} />
@@ -131,7 +134,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
               ))}
               {data.members.length === 0 && <li className="py-2 text-muted">No staff assigned.</li>}
             </ul>
-            {isAdmin && nonMembers.length > 0 && (
+            {assign && nonMembers.length > 0 && (
               <form key={data.members.map((m) => m.id).join(",")} action={membershipAction} className="flex items-end gap-2">
                 <input type="hidden" name="clientId" value={id} />
                 <label className="flex-1 text-sm">
@@ -146,10 +149,36 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
                 <Button type="submit" variant="secondary" size="sm">Assign</Button>
               </form>
             )}
-            {!isAdmin && <p className="text-xs text-muted">Only an admin can assign or remove staff.</p>}
+            <p className="text-xs text-muted">An assignment covers every website of this client. {!assign && "Only an admin can assign or remove staff."}</p>
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader title="Files" description="Titled links only. Genie Works does not store the file itself." />
+        <div className="space-y-4 px-5 pb-5 text-sm">
+          <ul className="space-y-3">
+            {data.files.length === 0 && <li className="text-muted">No file links recorded.</li>}
+            {data.files.map((file) => (
+              <li key={file.id} className="flex items-start justify-between gap-3">
+                <span>
+                  <a href={file.url} className="font-medium text-action hover:underline break-all" rel="noreferrer" target="_blank">{file.title}</a>
+                  {file.notes && <span className="mt-1 block whitespace-pre-wrap text-muted">{file.notes}</span>}
+                  <span className="mt-1 block text-xs text-muted">Opening the file depends on the site that hosts it.</span>
+                </span>
+                {manage && (
+                  <form action={archiveFileLinkAction}>
+                    <input type="hidden" name="clientId" value={id} />
+                    <input type="hidden" name="fileLinkId" value={file.id} />
+                    <Button type="submit" variant="ghost" size="sm">Remove</Button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+          {manage && <FileLinkForm clientId={id} />}
+        </div>
+      </Card>
 
       <Card>
         <CardHeader title="Booking" description="An external booking destination, or the appointment enquiry form when none is saved. The fallback is the primary contact." />
@@ -168,33 +197,33 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
               <p className="text-ink-soft">Fallback contact: {fallback.name}{fallback.work_phone ? ` · ${fallback.work_phone}` : ""}{fallback.work_email ? ` · ${fallback.work_email}` : ""}</p>
             ) : <p className="text-muted">No fallback contact is recorded.</p>;
           })()}
-          {edit && <p className="text-xs text-muted">Add or change a booking destination in Account references below.</p>}
+          {manage && <p className="text-xs text-muted">Add or change a booking destination in Account references below.</p>}
         </div>
       </Card>
 
       <Card>
         <CardHeader title="Account references" description="A reference is a saved link, an identifier and the staff member who owns it. Credentials stay in the vault." />
         <div className="space-y-6 px-5 pb-5">
-          {data.refs.length === 0 && <p className="text-sm text-muted">{edit ? "No account references recorded yet." : "No account references recorded."}</p>}
+          {data.refs.length === 0 && <p className="text-sm text-muted">{manage ? "No account references recorded yet." : "No account references recorded."}</p>}
           {data.refs.map((r) => (
             <div key={r.id} className={`border-b border-line pb-5 ${r.active ? "" : "opacity-70"}`}>
-              {edit ? <ReferenceForm clientId={id} staff={data.staff} values={r} /> : <p className="text-sm">{label(r.kind)}: {r.label}{r.owner_name ? ` · ${r.owner_name}` : ""}</p>}
+              {manage ? <ReferenceForm clientId={id} staff={data.staff} values={r} /> : <p className="text-sm">{label(r.kind)}: {r.label}{r.url ? ` · ${r.url}` : ""}{r.owner_name ? ` · ${r.owner_name}` : ""}</p>}
             </div>
           ))}
-          {edit && <div><h3 className="mb-2 text-sm font-semibold">Add a reference</h3><ReferenceForm key={data.refs.map((r) => r.id).join(",") || "none"} clientId={id} staff={data.staff} /></div>}
+          {manage && <div><h3 className="mb-2 text-sm font-semibold">Add a reference</h3><ReferenceForm key={data.refs.map((r) => r.id).join(",") || "none"} clientId={id} staff={data.staff} /></div>}
         </div>
       </Card>
 
       <Card>
         <CardHeader title="Websites" />
         <div className="space-y-6 px-5 pb-5">
-          {data.websites.length === 0 && <p className="text-sm text-muted">{edit ? "No websites recorded yet. Add a placeholder address below, not a real clinic URL." : "No websites recorded."}</p>}
+          {data.websites.length === 0 && <p className="text-sm text-muted">{manage ? "No websites recorded yet. Add a placeholder address below, not a real clinic URL." : "No websites recorded."}</p>}
           {data.websites.map((w) => (
             <div key={w.id} className="border-b border-line pb-5">
-              {edit ? <WebsiteForm clientId={id} values={w} /> : <p className="text-sm">{w.name} {w.url}</p>}
+              {manage ? <WebsiteForm clientId={id} values={w} /> : <p className="text-sm">{w.name}{w.url ? ` · ${w.url}` : ""} · {w.platform} · {label(w.environment)} · {label(w.status)}</p>}
             </div>
           ))}
-          {edit && <div><h3 className="mb-2 text-sm font-semibold">Add a website</h3><WebsiteForm key={data.websites.map((w) => w.id).join(",") || "none"} clientId={id} /></div>}
+          {manage && <div><h3 className="mb-2 text-sm font-semibold">Add a website</h3><WebsiteForm key={data.websites.map((w) => w.id).join(",") || "none"} clientId={id} /></div>}
         </div>
       </Card>
 

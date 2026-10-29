@@ -3,6 +3,8 @@ import { canEditClient, listActiveStaff, listClients, listWebsites } from "@clin
 import { requireAccess } from "@/lib/session";
 import { staffTx } from "@/lib/db";
 import { PageHeader, Card } from "@/components/ui/Card";
+import { SeoSubnav } from "@/components/modules/SeoSubnav";
+import { loadSeoContext } from "@/lib/seo-workspace";
 import { SeoPageForm } from "@/components/modules/SeoForms";
 import { Field, Select } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -22,9 +24,11 @@ export default async function NewSeoPage({ searchParams }: { searchParams: Promi
   });
   if (data.clients.length === 0) redirect("/seo");
   const chosen = data.clients.find((c) => c.id === client);
+  const ctx = await loadSeoContext(access, { client });
   return (
     <>
       <PageHeader title="Map a page" description="Record the page, its target search and content status." />
+      <SeoSubnav pathname="/seo/pages" ctx={ctx} />
       <Card className="p-6 max-w-3xl">
         {!chosen ? (
           <form method="get" className="space-y-4">

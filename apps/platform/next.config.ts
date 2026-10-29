@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   headers: async () => [
     {
+      source: "/blog/preview/:token*",
+      headers: [
+        { key: "Cache-Control", value: "private, no-store" },
+        { key: "X-Robots-Tag", value: "noindex, nofollow" },
+      ],
+    },
+    {
       source: "/(.*)",
       headers: [
         { key: "X-Frame-Options", value: "DENY" },

@@ -7,7 +7,6 @@ import { FilterBar, FilterInput, FilterSelect } from "@/components/ui/Filters";
 import { TimelineList } from "@/components/modules/TimelineList";
 import { label } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
-import { clientLabel } from "@/lib/client-label";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Timeline" };

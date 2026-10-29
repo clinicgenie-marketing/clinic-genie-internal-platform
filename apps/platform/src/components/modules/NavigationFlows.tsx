@@ -101,6 +101,7 @@ function build(flows: Flow[]) {
   const mergedLinks = new Map<string, number>();
   for (const [key, count] of linkCounts) {
     const [stepText, from, to] = key.split("|");
+    if (!from || !to) continue;
     const step = Number(stepText);
     const source = visible[step]?.has(from) ? from : columns[step]?.find((node) => node.more)?.page;
     const target = visible[step + 1]?.has(to) ? to : columns[step + 1]?.find((node) => node.more)?.page;
@@ -117,7 +118,7 @@ function build(flows: Flow[]) {
     const pairs = [...mergedLinks]
       .flatMap(([key, count]) => {
         const [stepText, from, to] = key.split("|");
-        return Number(stepText) === step ? [{ from, to, count }] : [];
+        return Number(stepText) === step && from && to ? [{ from, to, count }] : [];
       })
       .sort((a, b) => (targets.findIndex((node) => node.page === a.to) - targets.findIndex((node) => node.page === b.to)) || a.from.localeCompare(b.from));
     for (const pair of pairs) {

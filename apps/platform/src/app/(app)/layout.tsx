@@ -11,13 +11,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const access = await requireAccess();
   const workspace: NavItem[] = [
     { href: "/", label: "Dashboard", icon: "LayoutDashboard" },
-    { href: "/enquiries", label: "Enquiries", icon: "Inbox" },
     { href: "/clients", label: "Clients", icon: "Building2" },
   ];
   const modules: NavItem[] = [
-    { href: "/analytics", label: "Analytics", icon: "LineChart" },
-    { href: "/seo", label: "SEO", icon: "Search" },
-    { href: "/blog", label: "Blog", icon: "ClipboardList" },
+    { href: "/analytics", label: "Website analytics", icon: "LineChart" },
+    { href: "/seo", label: "SEO performance", icon: "Search" },
+    { href: "/blog", label: "Blogs", icon: "ClipboardList" },
+    { href: "/enquiries", label: "Leads and forms", icon: "Inbox" },
     { href: "/reports", label: "Reports", icon: "BarChart3" },
   ];
   const platform: NavItem[] = [

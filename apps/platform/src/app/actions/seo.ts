@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  archiveSeoPage, canEditClient, canManageRegistry, createSeoPage, getSeoPage, issueSeoSiteToken, recordSeoChange,
+  archiveSeoPage, canEditClient, canManageRegistry, canPublishClient, createSeoPage, getSeoPage, issueSeoSiteToken, recordSeoChange,
   saveGoogleSiteVerification, saveSeoBusinessProfile, saveSeoPageSetting, saveSeoRedirect,
   updateSeoPage, verifySeoChange, type SeoBusinessProfileRow, type SeoPageInput,
 } from "@clinic-genie/db";
@@ -109,7 +109,7 @@ export async function saveSeoPageSettingAction(_prev: ActionState, form: FormDat
   const access = await requireAccess();
   const clientId = str(form, "clientId");
   const websiteId = str(form, "websiteId");
-  if (!canEditClient(access, clientId)) return { ok: false, error: "You cannot publish SEO settings for this client." };
+  if (!canPublishClient(access, clientId)) return { ok: false, error: "You cannot publish SEO settings for this client." };
   try {
     await staffTx(access, (db) => saveSeoPageSetting(db, clientId, websiteId, {
       pagePath: str(form, "pagePath"),
@@ -129,7 +129,7 @@ export async function saveGoogleVerificationAction(_prev: ActionState, form: For
   const access = await requireAccess();
   const clientId = str(form, "clientId");
   const websiteId = str(form, "websiteId");
-  if (!canEditClient(access, clientId)) return { ok: false, error: "You cannot edit SEO settings for this client." };
+  if (!canPublishClient(access, clientId)) return { ok: false, error: "You cannot publish a verification tag for this client." };
   try {
     await staffTx(access, (db) => saveGoogleSiteVerification(db, clientId, websiteId, optional(form, "verificationToken"), access.user.id));
   } catch (err) {
@@ -143,7 +143,7 @@ export async function saveSeoRedirectAction(_prev: ActionState, form: FormData):
   const access = await requireAccess();
   const clientId = str(form, "clientId");
   const websiteId = str(form, "websiteId");
-  if (!canEditClient(access, clientId)) return { ok: false, error: "You cannot manage redirects for this client." };
+  if (!canPublishClient(access, clientId)) return { ok: false, error: "You cannot publish redirects for this client." };
   try {
     await staffTx(access, (db) => saveSeoRedirect(db, clientId, websiteId, {
       id: optional(form, "redirectId") ?? undefined,
@@ -155,6 +155,7 @@ export async function saveSeoRedirectAction(_prev: ActionState, form: FormData):
     return toActionError(err);
   }
   revalidatePath("/seo/redirects");
+  revalidatePath("/seo/tasks");
   revalidatePath("/seo/checklist");
   return { ok: true, message: "301 redirect saved." };
 }
@@ -178,6 +179,8 @@ export async function saveSeoBusinessProfileAction(_prev: ActionState, form: For
     return toActionError(err);
   }
   revalidatePath("/seo/business-profiles");
+  revalidatePath("/seo/business-profile");
+  revalidatePath("/seo/tasks");
   revalidatePath("/seo/checklist");
   return { ok: true, message: "Google Business Profile reference saved." };
 }
@@ -191,6 +194,7 @@ export async function rotateSeoSiteTokenAction(_prev: { ok: true; message?: stri
   try {
     const token = await staffTx(access, (db) => issueSeoSiteToken(db, clientId, websiteId, access.user.id));
     revalidatePath("/seo/settings");
+    revalidatePath("/seo/tasks");
     revalidatePath("/seo/checklist");
     return { ok: true as const, token, message: "Copy this token now. It will not be shown again." };
   } catch (err) {

@@ -16,6 +16,7 @@ const TABLES: Record<RelatedRecordType, { table: string; titleColumn: string }> 
   report_snapshot: { table: "report_snapshots", titleColumn: "metric" },
   website: { table: "websites", titleColumn: "name" },
   account_reference: { table: "account_references", titleColumn: "label" },
+  blog_article: { table: "blog_articles", titleColumn: "title" },
 };
 
 export function isRelatedType(v: string): v is RelatedRecordType {

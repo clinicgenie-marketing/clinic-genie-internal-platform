@@ -59,7 +59,7 @@ function sparkPath(points: Array<[number, number]>) {
     const after = points[Math.min(index + 2, points.length - 1)]!;
     const control1 = [current[0] + (next[0] - before[0]) / 6, current[1] + (next[1] - before[1]) / 6];
     const control2 = [next[0] - (after[0] - current[0]) / 6, next[1] - (after[1] - current[1]) / 6];
-    path += ` C ${control1[0].toFixed(1)} ${control1[1].toFixed(1)}, ${control2[0].toFixed(1)} ${control2[1].toFixed(1)}, ${next[0].toFixed(1)} ${next[1].toFixed(1)}`;
+    path += ` C ${control1[0]!.toFixed(1)} ${control1[1]!.toFixed(1)}, ${control2[0]!.toFixed(1)} ${control2[1]!.toFixed(1)}, ${next[0]!.toFixed(1)} ${next[1]!.toFixed(1)}`;
   }
   return path;
 }

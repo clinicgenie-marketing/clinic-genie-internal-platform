@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canExport, formatPeriod } from "@clinic-genie/db";
 import { requireAccess } from "@/lib/session";
-import { loadAnalytics, NoWebsites } from "@/components/modules/AnalyticsShell";
+import { loadAnalytics, NoWebsites, UnavailableClient } from "@/components/modules/AnalyticsShell";
 import { buttonClass } from "@/components/ui/Button";
 import { PageHeader, Card, CardHeader } from "@/components/ui/Card";
 import { Notice } from "@/components/ui/Notice";
@@ -19,17 +19,18 @@ export async function generateMetadata({ params }: { params: Promise<{ kind: str
   return { title: kind ? breakdownTitle(kind) : "Report" };
 }
 
-export default async function BreakdownReportPage({ params, searchParams }: { params: Promise<{ kind: string }>; searchParams: Promise<{ client?: string; range?: string; from?: string; to?: string }> }) {
+export default async function BreakdownReportPage({ params, searchParams }: { params: Promise<{ kind: string }>; searchParams: Promise<{ client?: string; website?: string; range?: string; from?: string; to?: string }> }) {
   const { kind: raw } = await params;
   const kind = breakdownKind(raw);
   if (!kind) notFound();
   const query = await searchParams;
   const access = await requireAccess();
-  const { view, rangeId, from, to } = await loadAnalytics(query.client, query.range, query.from, query.to);
+  const { denied, view, rangeId, from, to } = await loadAnalytics(query.client, query.range, query.from, query.to, query.website);
+  if (denied) return <UnavailableClient />;
   if (!view) return <NoWebsites />;
   const title = breakdownTitle(kind);
   const report = buildBreakdown(view, kind, title);
-  const search = analyticsSearch(view.clientId, rangeId, from, to);
+  const search = analyticsSearch(view.clientId, rangeId, from, to, view.websiteId ?? undefined);
   const back = `/analytics/${breakdownSection(kind)}?${search}`;
   const download = `/reports/breakdown/${kind}/download?${search}`;
   return (

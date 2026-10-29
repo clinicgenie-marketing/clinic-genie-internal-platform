@@ -13,7 +13,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ kind
   const access = await requireAccess();
   if (!canExport(access)) return new NextResponse("Not allowed", { status: 403 });
   const url = new URL(request.url);
-  const { view } = await loadAnalytics(url.searchParams.get("client") ?? undefined, url.searchParams.get("range") ?? undefined, url.searchParams.get("from") ?? undefined, url.searchParams.get("to") ?? undefined);
+  const { denied, view } = await loadAnalytics(url.searchParams.get("client") ?? undefined, url.searchParams.get("range") ?? undefined, url.searchParams.get("from") ?? undefined, url.searchParams.get("to") ?? undefined, url.searchParams.get("website") ?? undefined);
+  if (denied) return new NextResponse("Not allowed", { status: 403 });
   if (!view) return new NextResponse("Not found", { status: 404 });
   const title = breakdownTitle(kind);
   const report = buildBreakdown(view, kind, title);

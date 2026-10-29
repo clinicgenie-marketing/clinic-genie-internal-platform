@@ -6,6 +6,7 @@ import { staffTx } from "@/lib/db";
 import { PageHeader, Card, CardHeader, KeyValue, Stat } from "@/components/ui/Card";
 import { Badge, label, type Tone } from "@/components/ui/Badge";
 import { SettingsProfile } from "@/components/modules/SettingsProfile";
+import { AnalyticsConnections } from "@/components/modules/AnalyticsConnections";
 import { enquiryConnection } from "@/lib/form-submissions";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,8 @@ function Boundary({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ client?: string; analyticsState?: string; analyticsError?: string; analytics?: string }> }) {
+  const params = await searchParams;
   const access = await requireAccess();
   const privileged = canManageUsers(access);
   const global = canManageRegistry(access);
@@ -118,8 +120,16 @@ export default async function SettingsPage() {
             name="Measurement exports"
             status="Saved exports"
             tone="neutral"
-            detail="Analytics, Search Console and Google Ads figures are read from exports already stored for a clinic. There is no live account connection."
+            detail="Saved exports remain the report source until live reports are turned on. Provider connections are configured below."
           />
+          {global && (
+            <AnalyticsConnections
+              access={access}
+              clientId={params.client}
+              stateToken={params.analyticsState}
+              notice={params.analyticsError ?? params.analytics}
+            />
+          )}
         </Card>
 
         {privileged && admin && (

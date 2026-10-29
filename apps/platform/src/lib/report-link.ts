@@ -27,7 +27,7 @@ export function breakdownSection(kind: BreakdownKind): "traffic" | "behavior" {
 }
 
 /** Each analytics card opens the report of that breakdown, for the clinic and period already on screen. */
-export function breakdownLinks(clientId: string, range: PeriodRangeId, from?: string, to?: string): BreakdownLinks {
-  const search = analyticsSearch(clientId, range, from, to);
+export function breakdownLinks(clientId: string, range: PeriodRangeId, from?: string, to?: string, websiteId?: string): BreakdownLinks {
+  const search = analyticsSearch(clientId, range, from, to, websiteId);
   return Object.fromEntries(BREAKDOWN_REPORTS.map((report) => [report.id, `/reports/breakdown/${report.id}?${search}`])) as BreakdownLinks;
 }

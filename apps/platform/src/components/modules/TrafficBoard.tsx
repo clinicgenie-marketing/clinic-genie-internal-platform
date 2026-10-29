@@ -56,7 +56,7 @@ function smoothCurve(points: Array<[number, number]>) {
     const after = points[Math.min(index + 2, points.length - 1)]!;
     const control1 = [current[0] + (next[0] - previous[0]) / 6, current[1] + (next[1] - previous[1]) / 6];
     const control2 = [next[0] - (after[0] - current[0]) / 6, next[1] - (after[1] - current[1]) / 6];
-    path += ` C ${control1[0].toFixed(1)} ${control1[1].toFixed(1)}, ${control2[0].toFixed(1)} ${control2[1].toFixed(1)}, ${next[0].toFixed(1)} ${next[1].toFixed(1)}`;
+    path += ` C ${control1[0]!.toFixed(1)} ${control1[1]!.toFixed(1)}, ${control2[0]!.toFixed(1)} ${control2[1]!.toFixed(1)}, ${next[0]!.toFixed(1)} ${next[1]!.toFixed(1)}`;
   }
   return path;
 }
@@ -159,24 +159,29 @@ function shares(values: number[]) {
   return rounded;
 }
 
+function donutArcs(slices: Array<{ name: string; value: number; color: string }>, circumference: number) {
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  let covered = 0;
+  return slices.map((slice) => {
+    const raw = total === 0 ? 0 : (slice.value / total) * circumference;
+    const arc = { name: slice.name, color: slice.color, dash: `${Math.max(raw - 1.5, 0)} ${circumference - Math.max(raw - 1.5, 0)}`, offset: -covered };
+    covered += raw;
+    return arc;
+  });
+}
 function Donut({ slices, caption }: { slices: Array<{ name: string; value: number; color: string }>; caption: string }) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
   const portion = shares(slices.map((slice) => slice.value));
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
-  let cursor = 0;
+  const arcs = donutArcs(slices, circumference);
   return (
     <div className="flex flex-col items-start gap-3 px-5 pb-4 @min-[22rem]:flex-row @min-[22rem]:items-center">
       <div className="relative size-32 shrink-0">
         <svg viewBox="0 0 120 120" className="size-full -rotate-90" role="img" aria-label={caption}>
-          {slices.map((slice) => {
-            const raw = total === 0 ? 0 : (slice.value / total) * circumference;
-            const length = Math.max(raw - 1.5, 0);
-            const dash = `${length} ${circumference - length}`;
-            const offset = -cursor;
-            cursor += raw;
-            return <circle key={slice.name} cx="60" cy="60" r={radius} fill="none" stroke={slice.color} strokeWidth="14" strokeDasharray={dash} strokeDashoffset={offset} />;
-          })}
+          {arcs.map((arc) => (
+            <circle key={arc.name} cx="60" cy="60" r={radius} fill="none" stroke={arc.color} strokeWidth="14" strokeDasharray={arc.dash} strokeDashoffset={arc.offset} />
+          ))}
         </svg>
         <div className="absolute inset-0 grid place-items-center px-7 text-center">
           <div>

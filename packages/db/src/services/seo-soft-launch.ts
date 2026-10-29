@@ -1,6 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Queryable } from "../client";
+import { PermissionDeniedError } from "./auth";
 import { recordAudit } from "./audit";
+import { requireWebsiteForClient } from "./registry";
+
+async function assertPublisher(db: Queryable, actorUserId: string): Promise<void> {
+  const { rows } = await db.query<{ platform_role: string }>("select platform_role from staff_users where id = $1 and active", [actorUserId]);
+  if (rows[0]?.platform_role !== "admin" && rows[0]?.platform_role !== "manager") {
+    throw new PermissionDeniedError("Only an admin or manager can publish.");
+  }
+}
 
 export class SeoSoftLaunchRuleError extends Error {
   constructor(message: string) {
@@ -111,6 +120,8 @@ export async function saveSeoPageSetting(
   const description = input.description.trim();
   if (title.length < 1 || title.length > 200) throw new SeoSoftLaunchRuleError("Page title must be 1–200 characters.");
   if (description.length < 1 || description.length > 320) throw new SeoSoftLaunchRuleError("Meta description must be 1–320 characters.");
+  await assertPublisher(db, actorUserId);
+  await requireWebsiteForClient(db, websiteId, clientId);
 
   await db.query(
     `insert into seo_page_settings (client_id, website_id, page_path, title, description, canonical_path, indexable, updated_by)
@@ -134,6 +145,8 @@ export async function saveSeoPageSetting(
 export async function saveGoogleSiteVerification(db: Queryable, clientId: string, websiteId: string, value: string | null, actorUserId: string): Promise<void> {
   const token = value?.trim() || null;
   if (token && !/^[A-Za-z0-9_-]{1,200}$/.test(token)) throw new SeoSoftLaunchRuleError("Enter only the verification token from the Google Search Console HTML tag.");
+  await assertPublisher(db, actorUserId);
+  await requireWebsiteForClient(db, websiteId, clientId);
   await db.query(
     `insert into seo_website_settings (website_id, client_id, google_site_verification, updated_by)
      values ($1, $2, $3, $4)
@@ -186,6 +199,8 @@ export async function saveSeoRedirect(
 ): Promise<void> {
   const source = normalizeSeoPath(input.sourcePath, "From path");
   const destination = normalizeSeoPath(input.destinationPath, "To path");
+  await assertPublisher(db, actorUserId);
+  await requireWebsiteForClient(db, websiteId, clientId);
 
   await db.query("select pg_advisory_xact_lock(hashtext($1), hashtext($2))", [websiteId, "seo-redirects"]);
   const { rows: existing } = await db.query<{ id: string; source_path: string; destination_path: string }>(
