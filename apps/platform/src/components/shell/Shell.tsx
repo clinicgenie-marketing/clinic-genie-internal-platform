@@ -146,7 +146,7 @@ export function Shell({ workspace, modules, platform, header, account, staffName
           <TopBar staffName={staffName} pages={[...workspace, ...modules, ...platform]} clients={clients} adds={adds} />
           <div className="shrink-0 lg:hidden">{header}</div>
         </header>
-        <main id="main" className="w-full max-w-none flex-1 px-4 pt-6 pb-6 lg:px-8 lg:pt-8 lg:pb-8">{children}</main>
+        <main id="main" className="w-full min-w-0 max-w-none flex-1 px-4 pt-6 pb-6 lg:px-8 lg:pt-8 lg:pb-8">{children}</main>
       </div>
       <button
         type="button"

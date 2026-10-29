@@ -22,16 +22,24 @@ import { serviceTx, staffTx } from "@/lib/db";
 import { str } from "@/lib/actions";
 import { listGoogleProperties } from "@/lib/analytics-properties";
 
-function fail(code: string): never {
-  redirect(`/settings?analyticsError=${code}`);
+function fail(code: string, clientId?: string): never {
+  const params = new URLSearchParams({ analyticsError: code });
+  if (clientId) params.set("client", clientId);
+  redirect(`/settings?${params}`);
+}
+
+function done(code: string, clientId?: string): never {
+  const params = new URLSearchParams({ analytics: code });
+  if (clientId) params.set("client", clientId);
+  redirect(`/settings?${params}`);
 }
 
 async function managerWebsite(clientId: string, websiteId: string) {
   const access = await requireAccess();
-  if (!canManageRegistry(access)) fail("denied");
+  if (!canManageRegistry(access)) fail("denied", clientId);
   const website = await staffTx(access, async (db) => (await listWebsites(db, clientId)).find((row) => row.id === websiteId) ?? null);
-  if (!website) fail("denied");
-  return access;
+  if (!website) fail("denied", clientId);
+  return { access, website };
 }
 
 export async function bindAnalyticsProperty(formData: FormData) {
@@ -43,9 +51,9 @@ export async function bindAnalyticsProperty(formData: FormData) {
   const pending = await serviceTx((db) => readExchangedToken(db, state, access.user.id));
   if (!pending || (pending.provider !== "ga4" && pending.provider !== "gsc")) fail("oauth_failed");
   const website = await staffTx(access, async (db) => (await listWebsites(db, pending.clientId)).find((row) => row.id === pending.websiteId) ?? null);
-  if (!website) fail("denied");
+  if (!website) fail("denied", pending.clientId);
   const listed = await listGoogleProperties(pending.accessToken, pending.provider);
-  if (!listed.properties.some((property) => property.id === propertyId)) fail("property_unknown");
+  if (!listed.properties.some((property) => property.id === propertyId)) fail("property_unknown", pending.clientId);
   const family = pending.provider === "gsc" ? "search" : "traffic";
   try {
     await serviceTx(async (db) => {
@@ -71,24 +79,25 @@ export async function bindAnalyticsProperty(formData: FormData) {
       await enqueueDue(db, new Date(), pending.websiteId);
     });
   } catch (error) {
-    if (error instanceof AnalyticsRuleError && error.message === "traffic_exists") fail("traffic_exists");
+    if (error instanceof AnalyticsRuleError && error.message === "traffic_exists") fail("traffic_exists", pending.clientId);
     console.error("Analytics bind failed", { name: error instanceof Error ? error.name : "Error" });
-    fail("oauth_failed");
+    fail("oauth_failed", pending.clientId);
   }
   revalidatePath("/settings");
   revalidatePath("/analytics");
-  redirect("/settings?analytics=connected");
+  done("connected", pending.clientId);
 }
 
 export async function connectWix(formData: FormData) {
   const clientId = str(formData, "clientId");
   const websiteId = str(formData, "websiteId");
   const instanceId = str(formData, "instanceId");
-  const access = await managerWebsite(clientId, websiteId);
+  const { access, website } = await managerWebsite(clientId, websiteId);
+  if (!website.platform.toLowerCase().includes("wix")) fail("wix_rejected", clientId);
   const appId = process.env.ANALYTICS_WIX_APP_ID;
   const appSecret = process.env.ANALYTICS_WIX_APP_SECRET;
-  if (!appId || !appSecret || !process.env.ANALYTICS_TOKEN_KEY) fail("not_configured");
-  if (!instanceId || instanceId.length > 200) fail("wix_rejected");
+  if (!appId || !appSecret || !process.env.ANALYTICS_TOKEN_KEY) fail("not_configured", clientId);
+  if (!instanceId || instanceId.length > 200) fail("wix_rejected", clientId);
   const response = await fetch("https://www.wixapis.com/oauth2/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -129,24 +138,25 @@ export async function connectWix(formData: FormData) {
       await enqueueDue(db, new Date(), websiteId);
     });
   } catch (error) {
-    if (error instanceof AnalyticsRuleError && error.message === "traffic_exists") fail("traffic_exists");
+    if (error instanceof AnalyticsRuleError && error.message === "traffic_exists") fail("traffic_exists", clientId);
     console.error("Wix connection failed", { name: error instanceof Error ? error.name : "Error" });
-    fail("wix_rejected");
+    fail("wix_rejected", clientId);
   }
   revalidatePath("/settings");
   revalidatePath("/analytics");
-  redirect("/settings?analytics=connected");
+  done("connected", clientId);
 }
 
 export async function disconnectAnalytics(formData: FormData) {
   const access = await requireAccess();
   if (!canManageRegistry(access)) fail("denied");
   const connectionId = str(formData, "connectionId");
-  if (!connectionId) fail("denied");
+  const clientId = str(formData, "clientId");
+  if (!connectionId) fail("denied", clientId);
   await serviceTx((db) => disconnectConnection(db, { connectionId, actorUserId: access.user.id }));
   revalidatePath("/settings");
   revalidatePath("/analytics");
-  redirect("/settings?analytics=disconnected");
+  done("disconnected", clientId);
 }
 
 export async function refreshAnalytics(formData: FormData) {
@@ -155,15 +165,15 @@ export async function refreshAnalytics(formData: FormData) {
   await managerWebsite(clientId, websiteId);
   await serviceTx((db) => enqueueDue(db, new Date(), websiteId));
   revalidatePath("/settings");
-  redirect("/settings?analytics=queued");
+  done("queued", clientId);
 }
 
 export async function importAnalyticsCsv(formData: FormData) {
   const clientId = str(formData, "clientId");
   const websiteId = str(formData, "websiteId");
-  const access = await managerWebsite(clientId, websiteId);
+  const { access } = await managerWebsite(clientId, websiteId);
   const text = str(formData, "csv");
-  if (!text || text.length > 200_000) fail("import_rejected");
+  if (!text || text.length > 200_000) fail("import_rejected", clientId);
   const result = await staffTx(access, (db) => recordImport(db, {
     clientId,
     websiteId,
@@ -174,6 +184,6 @@ export async function importAnalyticsCsv(formData: FormData) {
     replace: formData.get("replace") === "on",
   }));
   revalidatePath("/settings");
-  if (result.error || result.decision === "reject") fail("import_rejected");
-  redirect(`/settings?analytics=${result.decision}`);
+  if (result.error || result.decision === "reject") fail("import_rejected", clientId);
+  done(result.decision, clientId);
 }

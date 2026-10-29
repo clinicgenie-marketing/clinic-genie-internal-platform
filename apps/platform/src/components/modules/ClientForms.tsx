@@ -179,7 +179,7 @@ export function ContactForm({ clientId, values }: { clientId: string; values?: {
   );
 }
 
-export function WebsiteForm({ clientId, values }: { clientId: string; values?: { id: string; name: string; url: string | null; platform: string; environment: string; status: string; notes: string | null } }) {
+export function WebsiteForm({ clientId, values }: { clientId: string; values?: { id: string; name: string; url: string | null; platform: string; environment: string; status: string; notes: string | null; blog_requirements?: { author?: boolean; category?: boolean; featuredImage?: boolean; seo?: boolean; social?: boolean } } }) {
   const [state, action, pending] = useActionState(saveWebsiteAction, null);
   const [name, setName] = useState(values?.name ?? "");
   const [url, setUrl] = useState(values?.url ?? "");
@@ -222,6 +222,17 @@ export function WebsiteForm({ clientId, values }: { clientId: string; values?: {
       <Field label="Notes" htmlFor={`w-notes-${id}`}>
         <Textarea id={`w-notes-${id}`} name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
       </Field>
+      {values && (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Article requirements</legend>
+          <p className="text-xs text-muted">Unchecked fields can be left empty when an article is submitted for review.</p>
+          <Checkbox name="requireAuthor" label="Require an author" defaultChecked={values.blog_requirements?.author === true} />
+          <Checkbox name="requireCategory" label="Require a category" defaultChecked={values.blog_requirements?.category === true} />
+          <Checkbox name="requireFeaturedImage" label="Require a featured image and alt text" defaultChecked={values.blog_requirements?.featuredImage === true} />
+          <Checkbox name="requireSeo" label="Require an SEO title and description" defaultChecked={values.blog_requirements?.seo === true} />
+          <Checkbox name="requireSocial" label="Require a sharing title and description" defaultChecked={values.blog_requirements?.social === true} />
+        </fieldset>
+      )}
       <FormError state={banner(state)} />
       <Button type="submit" variant={values ? "secondary" : "primary"} size="sm" disabled={pending} aria-busy={pending}>{pending ? "Saving…" : values ? "Save website" : "Add website"}</Button>
     </form>

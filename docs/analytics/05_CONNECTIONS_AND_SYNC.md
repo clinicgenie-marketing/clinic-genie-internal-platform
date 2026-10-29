@@ -15,7 +15,7 @@ Read-only APIs cannot discover or authorise inaccessible clinics without an acco
 | Job | Target cadence | Lookback / completion |
 | --- | --- | --- |
 | GA4 standard reports | Every 6 hours | Today plus preceding 7 source dates; provisional |
-| Wix reports | Daily, 06:00 website timezone | Last 7 source dates within endpoint history; intraday only if verified useful |
+| Wix reports | Daily, 06:00 website timezone | Infinite retention of stored source dates. Each run requests the full endpoint history (62 days). Intraday only if verified useful |
 | GSC | Daily, 10:00 Asia/Singapore | Re-fetch preceding 10 Pacific dates; record provider state |
 | Reconciliation | Weekly | Last 30 source dates where endpoint allows; preserve failed partitions |
 | Historical backfill | On connection | Chunk from verified availability boundary, resume checkpoint, progress per template |

@@ -6,15 +6,21 @@ import { serviceTx } from "@/lib/db";
 
 export async function GET(request: Request) {
   const access = await requireAccess();
-  if (!canManageRegistry(access)) return NextResponse.redirect(new URL("/settings?analyticsError=denied", request.url));
+  const url = new URL(request.url);
+  const client = url.searchParams.get("client") ?? "";
+  const denied = new URL("/settings", request.url);
+  if (client) denied.searchParams.set("client", client);
+  if (!canManageRegistry(access)) {
+    denied.searchParams.set("analyticsError", "denied");
+    return NextResponse.redirect(denied);
+  }
   const clientId = process.env.ANALYTICS_GOOGLE_CLIENT_ID;
   const secret = process.env.ANALYTICS_GOOGLE_CLIENT_SECRET;
   if (!clientId || !secret || !process.env.ANALYTICS_TOKEN_KEY) {
-    return NextResponse.redirect(new URL("/settings?analyticsError=not_configured", request.url));
+    denied.searchParams.set("analyticsError", "not_configured");
+    return NextResponse.redirect(denied);
   }
-  const url = new URL(request.url);
   const websiteId = url.searchParams.get("website") ?? "";
-  const client = url.searchParams.get("client") ?? "";
   const provider = url.searchParams.get("provider") === "gsc" ? "gsc" : "ga4";
   const redirectUri = new URL("/api/analytics/google/callback", process.env.AUTH_URL || url.origin).toString();
   const created = await serviceTx((db) => createOAuthState(db, {

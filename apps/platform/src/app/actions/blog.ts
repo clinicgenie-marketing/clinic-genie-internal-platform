@@ -12,10 +12,14 @@ import {
   decideArticleReview,
   getArticle,
   issueArticlePreview,
-  revokeArticlePreviews,
   listBlogWebsites,
   parseArticleBody,
   publishArticle,
+  restoreArticle,
+  restoreArticleVersion,
+  returnArticleToDraft,
+  revokeArticlePreviews,
+  startRevision,
   submitArticleForReview,
   unpublishArticle,
   updateArticle,
@@ -40,11 +44,17 @@ function articleInput(form: FormData) {
     websiteId: str(form, "websiteId"),
     title: str(form, "title"),
     slug: optional(form, "slug"),
+    slugEdited: bool(form, "slugEdited"),
+    excerpt: str(form, "excerpt"),
     category: str(form, "category"),
-    authorUserId: str(form, "authorUserId"),
+    authorUserId: optional(form, "authorUserId"),
     reviewerUserId: optional(form, "reviewerUserId"),
     seoTitle: str(form, "seoTitle"),
     seoDescription: str(form, "seoDescription"),
+    socialTitle: str(form, "socialTitle"),
+    socialDescription: str(form, "socialDescription"),
+    featuredMediaId: optional(form, "featuredMediaId"),
+    socialMediaId: optional(form, "socialMediaId"),
     canonicalPath: optional(form, "canonicalPath"),
     indexable: bool(form, "indexable"),
     body,
@@ -118,6 +128,7 @@ export async function publishArticleAction(_prev: ActionState, form: FormData): 
   const id = str(form, "articleId");
   const existing = await staffTx(access, (db) => getArticle(db, id));
   if (!existing || !canPublishClient(access, existing.client_id)) return { ok: false, error: "You cannot publish this article." };
+  if (str(form, "confirm") !== "yes") return { ok: false, error: "Confirm publication before continuing." };
   try {
     await staffTx(access, (db) => publishArticle(db, id, access.user.id));
   } catch (err) {
@@ -133,6 +144,7 @@ export async function unpublishArticleAction(_prev: ActionState, form: FormData)
   const id = str(form, "articleId");
   const existing = await staffTx(access, (db) => getArticle(db, id));
   if (!existing || !canPublishClient(access, existing.client_id)) return { ok: false, error: "You cannot unpublish this article." };
+  if (str(form, "confirm") !== "yes") return { ok: false, error: "Confirm removal before continuing." };
   try {
     await staffTx(access, (db) => unpublishArticle(db, id, access.user.id));
   } catch (err) {
@@ -202,5 +214,63 @@ export async function uploadArticleMediaAction(_prev: ActionState, form: FormDat
     return toActionError(err);
   }
   revalidatePath(`/blog/${id}`);
-  return { ok: true, message: "Image added. Insert it as an image block and save the draft." };
+  return { ok: true, message: "Image added. You can use it as the featured image or inside the article." };
+}
+
+export async function startRevisionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const access = await requireAccess();
+  const id = str(form, "articleId");
+  const existing = await staffTx(access, (db) => getArticle(db, id));
+  if (!existing || !canEditClient(access, existing.client_id)) return { ok: false, error: "You cannot revise this article." };
+  try {
+    await staffTx(access, (db) => startRevision(db, id, access.user.id));
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/blog/${id}`);
+  return { ok: true, message: "A working revision was created. The live article is unchanged." };
+}
+
+export async function returnToDraftAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const access = await requireAccess();
+  const id = str(form, "articleId");
+  const existing = await staffTx(access, (db) => getArticle(db, id));
+  if (!existing) return { ok: false, error: "Article not found." };
+  const allowed = canEditClient(access, existing.client_id) || (canReviewClient(access, existing.client_id) && access.user.id === existing.reviewer_user_id);
+  if (!allowed) return { ok: false, error: "You cannot return this article to draft." };
+  try {
+    await staffTx(access, (db) => returnArticleToDraft(db, id, access.user.id));
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/blog/${id}`);
+  return { ok: true, message: "Returned to draft. The previous approval no longer covers publication." };
+}
+
+export async function restoreArchivedAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const access = await requireAccess();
+  const id = str(form, "articleId");
+  const existing = await staffTx(access, (db) => getArticle(db, id));
+  if (!existing || !canEditClient(access, existing.client_id)) return { ok: false, error: "You cannot restore this article." };
+  try {
+    await staffTx(access, (db) => restoreArticle(db, id, access.user.id));
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/blog/${id}`);
+  return { ok: true, message: "Restored to draft. It is not published." };
+}
+
+export async function restoreVersionAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const access = await requireAccess();
+  const id = str(form, "articleId");
+  const existing = await staffTx(access, (db) => getArticle(db, id));
+  if (!existing || !canEditClient(access, existing.client_id)) return { ok: false, error: "You cannot restore a version of this article." };
+  try {
+    await staffTx(access, (db) => restoreArticleVersion(db, id, str(form, "versionId"), access.user.id, bool(form, "replaceWorking")));
+  } catch (err) {
+    return toActionError(err);
+  }
+  revalidatePath(`/blog/${id}`);
+  return { ok: true, message: existing.live_version_id ? "Restored into the working revision. The live article is unchanged." : "Restored as a new draft. Earlier versions are kept." };
 }

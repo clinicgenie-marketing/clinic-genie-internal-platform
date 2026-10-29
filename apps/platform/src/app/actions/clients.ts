@@ -120,7 +120,17 @@ export async function saveWebsiteAction(_prev: ActionState, form: FormData): Pro
       }
       const owned = (await listWebsites(db, clientId)).some((site) => site.id === websiteId);
       if (!owned) throw new RegistryRuleError("Website was not saved. You may not have permission to change it.");
-      await updateWebsite(db, websiteId, { ...input, status: (str(form, "status") || "active") as WebsiteRow["status"] }, access.user.id);
+      await updateWebsite(db, websiteId, {
+        ...input,
+        status: (str(form, "status") || "active") as WebsiteRow["status"],
+        blogRequirements: {
+          author: bool(form, "requireAuthor"),
+          category: bool(form, "requireCategory"),
+          featuredImage: bool(form, "requireFeaturedImage"),
+          seo: bool(form, "requireSeo"),
+          social: bool(form, "requireSocial"),
+        },
+      }, access.user.id);
     });
   } catch (err) {
     return toActionError(err);

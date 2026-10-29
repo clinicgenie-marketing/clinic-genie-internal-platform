@@ -4,7 +4,7 @@ import { decryptSecret, encryptSecret } from "./crypto";
 import { queryHash, safeAnalyticsPath, safeSearchQuery, type AnalyticsProvider } from "./measure";
 import { checkCompatibility, ga4PropertyPath, ga4ReportBody, ga4Template, isInvalidGrant, parseGa4Report } from "./providers/ga4";
 import { GSC_ROW_LIMIT, GSC_TIME_ZONE, encodeSiteUrl, gscHasAnotherPage, gscQueryBody, parseGscQuery } from "./providers/gsc";
-import { parseSemanticModel, parseWixData, wixDataUrl, wixDataWindow } from "./providers/wix";
+import { parseSemanticModel, parseWixData, wixDataUrl, wixDataWindow, wixDueWindow } from "./providers/wix";
 
 export interface FetchResponse {
   status: number;
@@ -95,7 +95,7 @@ export function dueWindow(provider: AnalyticsProvider, now: Date, timezone: stri
     return { start: addDays(end, -9), end };
   }
   const today = civilDate(timezone || "Asia/Singapore", now);
-  if (provider === "wix") return { start: addDays(today, -6), end: today };
+  if (provider === "wix") return wixDueWindow(today);
   return { start: addDays(today, -7), end: today };
 }
 

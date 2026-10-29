@@ -46,6 +46,7 @@ export interface WebsiteRow {
   environment: "production" | "staging" | "development";
   status: "active" | "archived";
   notes: string | null;
+  blog_requirements: { author: boolean; category: boolean; featuredImage: boolean; seo: boolean; social: boolean };
   created_at: Date;
   archived_at: Date | null;
 }
@@ -287,14 +288,15 @@ export async function createWebsite(
 export async function updateWebsite(
   db: Queryable,
   id: string,
-  input: { name: string; url: string | null; platform: string; environment: WebsiteRow["environment"]; status: WebsiteRow["status"]; notes: string | null },
+  input: { name: string; url: string | null; platform: string; environment: WebsiteRow["environment"]; status: WebsiteRow["status"]; notes: string | null; blogRequirements?: WebsiteRow["blog_requirements"] | null },
   actorUserId: string,
 ): Promise<void> {
   const { rows } = await db.query<WebsiteRow>(
     `update websites set name = $2, url = $3, platform = $4, environment = $5, status = $6, notes = $7,
+       blog_requirements = coalesce($8::jsonb, blog_requirements),
        archived_at = case when $6 = 'archived' and archived_at is null then now() when $6 = 'active' then null else archived_at end
      where id = $1 returning *`,
-    [id, input.name, input.url, input.platform, input.environment, input.status, input.notes],
+    [id, input.name, input.url, input.platform, input.environment, input.status, input.notes, input.blogRequirements ? JSON.stringify(input.blogRequirements) : null],
   );
   const site = rows[0];
   if (!site) throw new RegistryRuleError("Website was not saved. You may not have permission to change it.");

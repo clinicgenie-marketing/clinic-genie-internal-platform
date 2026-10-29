@@ -131,10 +131,12 @@ function enquiryPair(view: SiteView) {
   return { current: pair.current, previous: pair.previous };
 }
 
-export function reportRows(report: PublishedReport | null, metric: string): Array<{ label: string; value: number | null; state: string }> {
+export function reportRows(report: PublishedReport | null, metric: string | string[]): Array<{ label: string; value: number | null; state: string }> {
   if (!report) return [];
+  const keys = Array.isArray(metric) ? metric : [metric];
+  const chosen = keys.find((key) => report.rows.some((row) => row.metrics.some((item) => item.key === key && item.state === "available"))) ?? keys[0]!;
   return report.rows.map((row) => {
-    const found = row.metrics.find((item) => item.key === metric);
+    const found = row.metrics.find((item) => item.key === chosen);
     return { label: row.dimensionKey || "Property", value: found?.value ?? null, state: found?.state ?? "unavailable" };
   });
 }

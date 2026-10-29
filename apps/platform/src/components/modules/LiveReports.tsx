@@ -92,7 +92,7 @@ export async function LiveOverview({ view }: { view: SiteView }) {
             <Stat label="Stored enquiries" value={bundle.enquiries.current === null ? "Not recorded" : formatCount(bundle.enquiries.current)} hint="Clinic records, not a traffic provider." />
           </div>
         </Card>
-        <Rows title="Top pages" rows={reportRows(bundle.landing, "sessions")} empty="Unavailable for this period." />
+        <Rows title="Top pages" rows={reportRows(bundle.landing, ["sessions", "screenPageViews"])} empty="Unavailable for this period." />
         <Rows title="Organic search" rows={reportRows(bundle.search, "clicks")} empty={bundle.searchStatus === "connected" ? "Unavailable for this period. Search Console dates stay in Pacific time." : "Not connected."} />
       </div>
       {download && <a className="mt-4 inline-flex text-sm font-semibold text-action hover:underline" href={download}>Download this period</a>}
@@ -119,7 +119,7 @@ export async function LiveTraffic({ view, tab, range, from, to }: { view: SiteVi
       <Tabs base="/analytics/traffic" current={current} tabs={TRAFFIC_TABS} query={query} />
       {current === "acquisition" && <Rows title="Acquisition" rows={reportRows(bundle.sources, "sessions")} empty="Unavailable. A GA4 user split is not shown as a complete donut." />}
       {current === "campaigns" && <p className="text-sm text-ink-soft">Campaign detail is unavailable until a provider report names campaigns. Filters from GA4 are not applied to Search Console.</p>}
-      {current === "landing" && <Rows title="Landing pages" rows={reportRows(bundle.landing, "sessions")} empty="Unavailable for this period." />}
+      {current === "landing" && <Rows title="Landing pages" rows={reportRows(bundle.landing, ["sessions", "screenPageViews"])} empty="Unavailable for this period." />}
       {current === "audience" && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Rows title="Device" rows={reportRows(bundle.devices, "sessions")} empty="Unavailable for this period." />
@@ -168,7 +168,7 @@ export async function LiveBehaviour({ view, tab, range, from, to }: { view: Site
     <div>
       <Health bundle={bundle} />
       <Tabs base="/analytics/behavior" current={current} tabs={BEHAVIOUR_TABS} query={query} />
-      {current === "pages" && <Rows title="Pages" rows={reportRows(bundle.landing, "sessions")} empty="Page views for this period are unavailable. Visits are not renamed until the stored metric is confirmed." />}
+      {current === "pages" && <Rows title="Pages" rows={reportRows(bundle.landing, ["sessions", "screenPageViews"])} empty="Page views for this period are unavailable." />}
       {current === "interactions" && <Metric label="Contact clicks" metric={bundle.contacts} />}
       {current === "forms" && (
         <Card>

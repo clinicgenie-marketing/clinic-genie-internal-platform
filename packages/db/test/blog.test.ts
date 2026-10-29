@@ -9,16 +9,21 @@ import {
   decideArticleReview,
   getArticle,
   getArticlePreview,
+  getArticleVersion,
   getPublishedBlog,
   getPublishedBlogMedia,
   isNativeWebsitePlatform,
   issueArticlePreview,
+  listArticleActivity,
   listArticles,
   listArticleVersions,
   parseArticleBody,
   publishArticle,
   renderPublishedArticle,
   renderPublishedSitemap,
+  restoreArticle,
+  restoreArticleVersion,
+  returnArticleToDraft,
   revokeArticlePreviews,
   submitArticleForReview,
   unpublishArticle,
@@ -198,7 +203,8 @@ describe("native blog", () => {
       const published = await getArticle(db, id);
       await updateArticle(db, id, { ...input, title: "Draft only sentence", slug: "draft-only-sentence", body: { ...body, blocks: [...body.blocks, { type: "paragraph", text: "DRAFT-SENTENCE" }] } }, specA.id, published!.current_version_id!);
       const draft = await getArticle(db, id);
-      expect(draft?.status).toBe("draft");
+      expect(draft?.status).toBe("published");
+      expect(draft?.working_status).toBe("draft");
       expect(draft?.live_version_id).toBe(published?.current_version_id);
       expect(draft?.title).toBe("Draft only sentence");
       const approvals = await db.query<{ version_id: string }>("select version_id from blog_approvals where article_id = $1 and decision = 'approved'", [id]);
@@ -246,8 +252,8 @@ describe("native blog", () => {
 
       await applyContext(db, staffCtx(specB));
       expect(await getArticle(db, id)).toBeNull();
-      expect(await listArticles(db, { query: "Public care note" })).toEqual([]);
-      expect(await listArticles(db, { query: "Draft only" })).toEqual([]);
+      expect((await listArticles(db, { query: "Public care note" })).articles).toEqual([]);
+      expect((await listArticles(db, { query: "Draft only" })).articles).toEqual([]);
     });
   });
 
@@ -275,6 +281,168 @@ describe("native blog", () => {
     expect(html).toContain("noindex,nofollow");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
+  });
+
+  it("keeps drafts incomplete, isolates clients, and publishes only the approved live snapshot", async () => {
+    const admin = await staffByEmail("admin@example.invalid");
+    const manager = await staffByEmail("manager@example.invalid");
+    const specA = await staffByEmail("specialist-a@example.invalid");
+    const specB = await staffByEmail("specialist-b@example.invalid");
+    const reviewer = await staffByEmail("reviewer@example.invalid");
+    const readOnly = await staffByEmail("readonly@example.invalid");
+    const meridian = await clientBySlug("meridian-skin");
+    const harbour = await clientBySlug("harbourview-dental");
+    const native = (await adminPool.query<{ id: string }>("select id from websites where client_id = $1 and platform = 'Next.js on Vercel' and environment = 'production'", [meridian])).rows[0]!;
+    const staging = (await adminPool.query<{ id: string }>("select id from websites where client_id = $1 and platform = 'Next.js on Vercel' and environment = 'staging'", [meridian])).rows[0]!;
+    const otherNative = (await adminPool.query<{ id: string }>("select id from websites where client_id = $1 and platform ilike '%next%' limit 1", [harbour])).rows[0];
+
+    await asContext(staffCtx(admin), async (db) => {
+      await applyContext(db, staffCtx(specA));
+      const draftId = await createArticle(db, {
+        clientId: meridian,
+        websiteId: native.id,
+        title: "",
+        slug: null,
+        category: "",
+        authorUserId: null,
+        reviewerUserId: null,
+        seoTitle: "",
+        seoDescription: "",
+        canonicalPath: null,
+        indexable: true,
+        body: { layout: "clinic-article-v1", blocks: [{ type: "paragraph", text: "" }] },
+      }, specA.id);
+      const reopened = await getArticle(db, draftId);
+      expect(reopened?.created_by).toBe(specA.id);
+      expect(reopened?.website_id).toBe(native.id);
+      expect(reopened?.title).toBe("");
+      expect(reopened?.slug).toBeNull();
+      await expect(submitArticleForReview(db, draftId, specA.id)).rejects.toMatchObject({ field: "title" });
+
+      const input: ArticleInput = {
+        clientId: meridian,
+        websiteId: native.id,
+        title: "Versioned care note",
+        slug: "versioned-care-note",
+        category: "Care",
+        authorUserId: specA.id,
+        reviewerUserId: reviewer.id,
+        seoTitle: "Versioned care note",
+        seoDescription: "A fictional note.",
+        canonicalPath: null,
+        indexable: true,
+        body,
+      };
+      const id = await createArticle(db, input, specA.id);
+      const sameSlug = await createArticle(db, { ...input, websiteId: staging.id, title: "Staging versioned note" }, specA.id);
+      expect(sameSlug).not.toBe(id);
+      await expect(updateArticle(db, id, input, specA.id, "00000000-0000-0000-0000-000000000000")).rejects.toThrow(/newer version/);
+      expect((await getArticle(db, id))?.title).toBe("Versioned care note");
+
+      await submitArticleForReview(db, id, specA.id);
+      await expect(updateArticle(db, id, input, specA.id, (await getArticle(db, id))!.current_version_id!)).rejects.toThrow(/draft/);
+      await applyContext(db, staffCtx(reviewer));
+      await expect(decideArticleReview(db, id, "returned", "  ", reviewer.id)).rejects.toThrow(/feedback/);
+      await decideArticleReview(db, id, "returned", "Please name the fictional clinic.", reviewer.id);
+      const returned = await getArticle(db, id);
+      expect(returned?.status).toBe("draft");
+      const feedback = await listArticleActivity(db, id);
+      expect(feedback.some((event) => event.action === "changes_requested" && event.note?.includes("fictional clinic"))).toBe(true);
+
+      await applyContext(db, staffCtx(specA));
+      const current = await getArticle(db, id);
+      await updateArticle(db, id, { ...input, title: "Versioned care note revised" }, specA.id, current!.current_version_id!);
+      await submitArticleForReview(db, id, specA.id);
+      await applyContext(db, staffCtx(specB));
+      await expect(decideArticleReview(db, id, "approved", null, specB.id)).rejects.toThrow();
+      await applyContext(db, staffCtx(reviewer));
+      const submitted = await getArticle(db, id);
+      await decideArticleReview(db, id, "approved", null, reviewer.id);
+      await applyContext(db, staffCtx(specA));
+      await returnArticleToDraft(db, id, specA.id);
+      await expect(publishArticle(db, id, admin.id)).rejects.toThrow(/Approve/);
+      const stale = await getArticle(db, id);
+      expect(stale?.status).toBe("draft");
+      expect(stale?.current_version_id).toBe(submitted?.current_version_id);
+      await submitArticleForReview(db, id, specA.id);
+      await applyContext(db, staffCtx(manager));
+      await decideArticleReview(db, id, "approved", null, manager.id);
+      await publishArticle(db, id, manager.id);
+      await publishArticle(db, id, manager.id);
+      const publications = await db.query<{ count: number }>("select count(*)::int as count from blog_publications where article_id = $1 and action = 'publish'", [id]);
+      expect(publications.rows[0]?.count).toBe(1);
+
+      const token = randomBytes(32).toString("base64url");
+      await applyContext(db, { kind: "service" });
+      await db.query("insert into seo_site_tokens (client_id, website_id, token_hash, created_by) values ($1, $2, $3, $4)", [meridian, native.id, createHash("sha256").update(token).digest("hex"), admin.id]);
+      const live = await getPublishedBlog(db, native.id, token);
+      expect(live?.articles.map((article) => article.title)).toEqual(["Versioned care note revised"]);
+      expect(JSON.stringify(live)).not.toContain("Please name");
+
+      await applyContext(db, staffCtx(specA));
+      const published = await getArticle(db, id);
+      await updateArticle(db, id, { ...input, title: "Working revision sentence", slug: "working-revision-sentence", body: { ...body, blocks: [...body.blocks, { type: "paragraph", text: "WORKING-REVISION" }] } }, specA.id, published!.current_version_id!);
+      await applyContext(db, { kind: "service" });
+      const still = await getPublishedBlog(db, native.id, token);
+      expect(still?.articles[0]?.title).toBe("Versioned care note revised");
+      expect(still?.articles[0]?.slug).toBe("versioned-care-note");
+      expect(JSON.stringify(still)).not.toContain("WORKING-REVISION");
+
+      await applyContext(db, staffCtx(specA));
+      const revision = await getArticle(db, id);
+      expect(revision?.status).toBe("published");
+      expect(revision?.revision_indicator).toBe("draft_revision");
+      await submitArticleForReview(db, id, specA.id);
+      await applyContext(db, staffCtx(reviewer));
+      await decideArticleReview(db, id, "approved", null, reviewer.id);
+      await applyContext(db, staffCtx(admin));
+      await db.query("savepoint publish_failure");
+      await db.query("select set_config('app.blog_transition', 'publish', true)");
+      await expect(db.query("update blog_articles set live_version_id = null where id = $1", [id])).rejects.toThrow();
+      await db.query("rollback to savepoint publish_failure");
+      const preserved = await getArticle(db, id);
+      expect(preserved?.live_version_id).toBe(published?.live_version_id);
+      expect(preserved?.working_status).toBe("approved");
+      await publishArticle(db, id, admin.id);
+      await applyContext(db, { kind: "service" });
+      const replaced = await getPublishedBlog(db, native.id, token);
+      expect(replaced?.articles[0]?.slug).toBe("working-revision-sentence");
+      expect(replaced?.articles.map((article) => article.slug)).toEqual(["working-revision-sentence"]);
+
+      await applyContext(db, staffCtx(admin));
+      await expect(archiveArticle(db, id, admin.id)).rejects.toThrow(/Unpublish/);
+      await unpublishArticle(db, id, admin.id);
+      const unpublished = await getArticle(db, id);
+      expect(unpublished?.status).toBe("draft");
+      expect(unpublished?.live_version_id).toBeNull();
+      expect(unpublished?.title).toBe("Working revision sentence");
+      await applyContext(db, { kind: "service" });
+      expect((await getPublishedBlog(db, native.id, token))?.articles).toEqual([]);
+
+      await applyContext(db, staffCtx(specA));
+      await submitArticleForReview(db, id, specA.id);
+      await expect(archiveArticle(db, id, specA.id)).rejects.toThrow(/draft/);
+      await returnArticleToDraft(db, id, specA.id);
+      const source = (await listArticleVersions(db, id)).at(-1)!;
+      await restoreArticleVersion(db, id, source.id, specA.id);
+      const restored = await getArticle(db, id);
+      expect(restored?.status).toBe("draft");
+      expect(restored?.current_version_id).not.toBe(source.id);
+      expect((await listArticleVersions(db, id)).some((version) => version.id === source.id)).toBe(true);
+      await archiveArticle(db, id, specA.id);
+      expect((await getArticle(db, id))?.status).toBe("archived");
+      await restoreArticle(db, id, specA.id);
+      expect((await getArticle(db, id))?.status).toBe("draft");
+      await expect(publishArticle(db, id, admin.id)).rejects.toThrow(/Approve/);
+
+      await applyContext(db, staffCtx(specB));
+      expect(await getArticle(db, id)).toBeNull();
+      expect(await getArticleVersion(db, id, source.id)).toBeNull();
+      expect(await listArticleActivity(db, id)).toEqual([]);
+      expect((await listArticles(db, { websiteId: native.id })).articles).toEqual([]);
+      if (readOnly) expect(readOnly.id).not.toBe(specA.id);
+      expect(otherNative || harbour).toBeTruthy();
+    });
   });
 
   it("identifies native websites without treating Wix as publishable", () => {

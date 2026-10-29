@@ -5,6 +5,11 @@ export const WIX_DATA_HISTORY_DAYS = 62;
 
 export const WIX_DATA_MEASURES = ["TOTAL_SESSIONS", "TOTAL_UNIQUE_VISITORS", "CLICKS_TO_CONTACT", "TOTAL_FORMS_SUBMITTED"] as const;
 
+/** Inclusive window of every day this endpoint can still return. Stored days are kept after they age out of it. */
+export function wixDueWindow(today: string): { start: string; end: string } {
+  return { start: addDays(today, -(WIX_DATA_HISTORY_DAYS - 1)), end: today };
+}
+
 export function wixDataWindow(today: string, start: string, end: string): { start: string; end: string; clipped: boolean } | { error: "outside_history" } {
   const oldest = addDays(today, -(WIX_DATA_HISTORY_DAYS - 1));
   if (end < oldest) return { error: "outside_history" };

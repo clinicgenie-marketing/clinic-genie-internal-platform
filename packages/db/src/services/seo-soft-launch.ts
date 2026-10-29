@@ -297,6 +297,8 @@ export async function saveSeoBusinessProfile(
 }
 
 export async function issueSeoSiteToken(db: Queryable, clientId: string, websiteId: string, actorUserId: string): Promise<string> {
+  await assertPublisher(db, actorUserId);
+  await requireWebsiteForClient(db, websiteId, clientId);
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   await db.query("update seo_site_tokens set revoked_at = now() where website_id = $1 and revoked_at is null", [websiteId]);

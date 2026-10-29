@@ -171,6 +171,13 @@ export async function setSourcePolicy(db: Queryable, input: {
      where website_id = $1 and report_family = $2 and effective_to is null and effective_from < $3::date`,
     [input.websiteId, input.reportFamily, input.effectiveFrom],
   );
+  const replaced = await db.query(
+    `update analytics_source_policies set connection_id = $4, changed_by = $5
+     where website_id = $1 and report_family = $2 and effective_to is null and effective_from = $3::date
+     returning id`,
+    [input.websiteId, input.reportFamily, input.effectiveFrom, input.connectionId, input.actorUserId],
+  );
+  if (replaced.rows.length > 0) return;
   await db.query(
     `insert into analytics_source_policies (client_id, website_id, report_family, connection_id, effective_from, changed_by)
      values ($1, $2, $3, $4, $5, $6)`,

@@ -13,7 +13,7 @@ function workspaceLinks(clientId: string, slug: string, websites: Array<{ id: st
   return [
     { href: `/analytics?${query}`, label: "Website analytics" },
     { href: `/seo?${query}`, label: "SEO performance" },
-    { href: `/blog?${query}`, label: "Blogs" },
+    { href: `/blog?${query}`, label: "Blog" },
     { href: `/enquiries?clinic=${encodeURIComponent(slug)}`, label: "Leads and forms" },
     { href: `/reports?client=${clientId}`, label: "Reports" },
   ];

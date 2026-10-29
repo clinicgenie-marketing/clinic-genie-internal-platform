@@ -7,7 +7,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ webs
   try {
     const published = await readPublishedBlog(request, websiteId);
     if (!published) return new Response("Not found", { status: 404, headers: BLOG_PRIVATE_HEADERS });
-    const html = renderPublishedIndex(published.articles, published.origin, `/api/public/blog/${websiteId}/page`);
+    const html = renderPublishedIndex(published.articles, published.origin, `/api/public/blog/${websiteId}/page`, `/api/public/blog/${websiteId}/media`);
     return new Response(html, { headers: { ...BLOG_PRIVATE_HEADERS, "Content-Type": "text/html; charset=utf-8" } });
   } catch (error) {
     console.error("Blog page unavailable", { name: error instanceof Error ? error.name : "UnknownError" });

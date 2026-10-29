@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 
 const control = "block w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink min-h-11 placeholder:text-muted/70 disabled:bg-surface-muted disabled:text-muted";
 
@@ -19,9 +19,9 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${control} ${props.className ?? ""}`} />;
 }
 
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea rows={3} {...props} className={`${control} min-h-24 ${props.className ?? ""}`} />;
-}
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(props, ref) {
+  return <textarea ref={ref} rows={3} {...props} className={`${control} min-h-24 ${props.className ?? ""}`} />;
+});
 
 export function Select({ children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
@@ -40,8 +40,19 @@ export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputEleme
   );
 }
 
-export function FormError({ state }: { state: { ok: false; error: string } | { ok: true; message?: string } | null | undefined }) {
+export function FormError({ state }: { state: { ok: false; error: string; issues?: { field: string; message: string }[] } | { ok: true; message?: string } | null | undefined }) {
   if (!state) return null;
   if (state.ok) return state.message ? <p role="status" className="text-sm text-good bg-good-bg rounded-xl px-3 py-2">{state.message}</p> : null;
-  return <p role="alert" className="text-sm text-bad bg-bad-bg rounded-xl px-3 py-2">{state.error}</p>;
+  return (
+    <div role="alert" className="text-sm text-bad bg-bad-bg rounded-xl px-3 py-2">
+      <p>{state.error}</p>
+      {state.issues && state.issues.length > 0 && (
+        <ul className="mt-2 list-disc pl-5">
+          {state.issues.map((issue) => (
+            <li key={`${issue.field}-${issue.message}`}><a href={`#${issue.field}`} className="underline">{issue.message}</a></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }

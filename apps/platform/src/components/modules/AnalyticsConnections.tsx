@@ -37,17 +37,6 @@ export async function AnalyticsConnections({
 }) {
   const googleReady = Boolean(process.env.ANALYTICS_GOOGLE_CLIENT_ID && process.env.ANALYTICS_GOOGLE_CLIENT_SECRET && process.env.ANALYTICS_TOKEN_KEY);
   const wixReady = Boolean(process.env.ANALYTICS_WIX_APP_ID && process.env.ANALYTICS_WIX_APP_SECRET && process.env.ANALYTICS_TOKEN_KEY);
-  const data = await staffTx(access, async (db) => {
-    const clients = await listClients(db);
-    const selected = clients.find((client) => client.id === clientId) ?? clients[0] ?? null;
-    if (!selected) return { clients, selected: null, websites: [], connections: [] };
-    return {
-      clients,
-      selected,
-      websites: await listWebsites(db, selected.id),
-      connections: await listConnections(db, selected.id),
-    };
-  });
   const pending = stateToken
     ? await serviceTx(async (db) => {
         const exchanged = await readExchangedToken(db, stateToken, access.user.id);
@@ -56,7 +45,20 @@ export async function AnalyticsConnections({
         return { provider: exchanged.provider, clientId: exchanged.clientId, websiteId: exchanged.websiteId, properties: listed.properties, error: listed.error };
       })
     : null;
+  const requestedClientId = pending?.clientId || clientId;
+  const data = await staffTx(access, async (db) => {
+    const clients = await listClients(db);
+    const selected = clients.find((client) => client.id === requestedClientId) ?? clients[0] ?? null;
+    if (!selected) return { clients, selected: null, websites: [], connections: [] };
+    return {
+      clients,
+      selected,
+      websites: await listWebsites(db, selected.id),
+      connections: await listConnections(db, selected.id),
+    };
+  });
   const message = notice ? MESSAGES[notice] : undefined;
+  const pendingWebsite = data.websites.find((website) => website.id === pending?.websiteId);
   return (
     <div className="border-t border-line px-5 py-5">
       <h3 className="text-sm font-semibold text-ink">Analytics providers</h3>
@@ -67,6 +69,7 @@ export async function AnalyticsConnections({
       {data.selected && data.websites.length === 0 && <p className="mt-4 text-sm text-ink-soft">This clinic has no website yet.</p>}
       {data.websites.map((website) => {
         const rows = data.connections.filter((connection) => connection.website_id === website.id && connection.disconnected_at === null);
+        const wixSite = website.platform.toLowerCase().includes("wix");
         return (
           <section key={website.id} className="mt-4 rounded-xl border border-line p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -89,6 +92,7 @@ export async function AnalyticsConnections({
                     <Badge tone={connection.status === "connected" ? "good" : "warn"}>{connection.status === "reconnect_required" ? "Reconnect required" : connection.status}</Badge>
                     <form action={disconnectAnalytics}>
                       <input type="hidden" name="connectionId" value={connection.id} />
+                      <input type="hidden" name="clientId" value={data.selected?.id} />
                       <button className={buttonClass("secondary", "sm")} type="submit">Disconnect</button>
                     </form>
                   </span>
@@ -99,7 +103,7 @@ export async function AnalyticsConnections({
               {googleReady && <Link className={buttonClass("secondary", "sm")} href={`/api/analytics/google/start?client=${data.selected?.id}&website=${website.id}&provider=ga4`}>Connect GA4</Link>}
               {googleReady && <Link className={buttonClass("secondary", "sm")} href={`/api/analytics/google/start?client=${data.selected?.id}&website=${website.id}&provider=gsc`}>Connect Search Console</Link>}
             </div>
-            {wixReady && (
+            {wixSite && wixReady && (
               <form action={connectWix} className="mt-3 flex flex-wrap items-end gap-2">
                 <input type="hidden" name="clientId" value={data.selected?.id} />
                 <input type="hidden" name="websiteId" value={website.id} />
@@ -110,13 +114,14 @@ export async function AnalyticsConnections({
                 <button className={buttonClass("secondary", "sm")} type="submit">Connect Wix</button>
               </form>
             )}
-            <p className="mt-2 text-xs text-muted">The Wix app needs scope SCOPE.DC-ANALYTICS-AND-REPORTS.READ-SITE-ANALYTICS. There is no Wix user sign-in step.</p>
+            {wixSite && <p className="mt-2 text-xs text-muted">The Wix app needs scope SCOPE.DC-ANALYTICS-AND-REPORTS.READ-SITE-ANALYTICS. There is no Wix user sign-in step.</p>}
           </section>
         );
       })}
       {pending && (
         <form action={bindAnalyticsProperty} className="mt-4 rounded-xl border border-line p-4">
-          <h4 className="text-sm font-semibold text-ink">Choose the {pending.provider === "gsc" ? "Search Console" : "GA4"} property</h4>
+          <h4 className="text-sm font-semibold text-ink">Choose the {pending.provider === "gsc" ? "Search Console" : "GA4"} property{pendingWebsite ? ` for ${pendingWebsite.name}` : ""}</h4>
+          <p className="mt-1 text-sm text-ink-soft">{data.selected?.name}{pendingWebsite ? ` · ${pendingWebsite.name}` : ""}</p>
           {pending.error && <p className="mt-2 text-sm text-ink-soft">{pending.error}</p>}
           <input type="hidden" name="state" value={stateToken} />
           <div className="mt-3 space-y-2">

@@ -16,10 +16,10 @@ export function FilterBar({ children, action, clearHref, formKey }: { children: 
 
 export function FilterSelect({ name, label, value, options, allLabel = "All" }: { name: string; label: string; value?: string; options: Array<{ value: string; label: string }>; allLabel?: string }) {
   return (
-    <label className="text-xs font-medium text-muted flex flex-col gap-1">
+    <label className="flex max-w-full flex-col gap-1 text-xs font-medium text-muted">
       {label}
-      <span className="relative inline-flex">
-        <select name={name} defaultValue={value ?? ""} className="min-h-10 min-w-40 appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-11 text-sm text-ink">
+      <span className="relative inline-flex max-w-full">
+        <select name={name} defaultValue={value ?? ""} className="min-h-10 w-full min-w-40 max-w-full appearance-none rounded-full border border-line bg-surface py-2 pl-4 pr-11 text-sm text-ink">
           <option value="">{allLabel}</option>
           {options.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>

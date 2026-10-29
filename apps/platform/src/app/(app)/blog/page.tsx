@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { canEditClient, listActiveStaff, listArticles, listBlogWebsites, listClientsForRequest, scopeWorkspace, type BlogStatus } from "@clinic-genie/db";
-import { BLOG_STATUSES } from "@clinic-genie/contracts";
 import { requireAccess } from "@/lib/session";
 import { staffTx } from "@/lib/db";
 import { PageHeader, Card } from "@/components/ui/Card";
@@ -27,17 +26,36 @@ const STATUS_TONE: Record<BlogStatus, Tone> = {
   published: "good",
   archived: "neutral",
 };
-
-function isStatus(value: string | undefined): value is BlogStatus {
-  return BLOG_STATUSES.includes(value as BlogStatus);
-}
-
+const REVISION_LABEL = {
+  draft_revision: "Draft revision",
+  revision_in_review: "Revision in review",
+  approved_revision: "Approved revision",
+} as const;
+const FILTERS = ["all", "draft", "in_review", "approved", "published", "archived"] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function BlogPage({ searchParams }: { searchParams: Promise<{ client?: string; website?: string; status?: string; category?: string; author?: string; reviewer?: string; q?: string }> }) {
+function isStatus(value: string | undefined): value is BlogStatus {
+  return value === "draft" || value === "in_review" || value === "approved" || value === "published" || value === "archived";
+}
+
+function stamp(value: Date | string | null, withTime = true) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-SG", { timeZone: "Asia/Singapore", dateStyle: "medium", ...(withTime ? { timeStyle: "short" as const } : {}) }).format(new Date(value));
+}
+
+function queryHref(params: Record<string, string | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value) search.set(key, value);
+  const query = search.toString();
+  return query ? `/blog?${query}` : "/blog";
+}
+
+export default async function BlogPage({ searchParams }: { searchParams: Promise<{ client?: string; website?: string; status?: string; author?: string; q?: string; sort?: string; page?: string }> }) {
   const access = await requireAccess();
   const params = await searchParams;
   const status = isStatus(params.status) ? params.status : undefined;
+  const page = Number(params.page) > 0 ? Number(params.page) : 1;
+  const sort = params.sort === "published" ? "published" : "updated";
   const data = await staffTx(access, async (db) => {
     const websites = await listBlogWebsites(db);
     const clients = await listClientsForRequest(db, params.client);
@@ -47,74 +65,107 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
       clients,
       websites: websites.map((site) => ({ id: site.id, clientId: site.client_id })),
     });
-    return {
-      articles: await listArticles(db, {
-        clientId: selection.clientId ?? undefined,
-        websiteId: selection.websiteId ?? undefined,
-        status,
-        category: params.category,
-        authorUserId: params.author && UUID.test(params.author) ? params.author : undefined,
-        reviewerUserId: params.reviewer && UUID.test(params.reviewer) ? params.reviewer : undefined,
-        query: params.q,
-      }),
-      websites,
-      clients,
-      staff: await listActiveStaff(db),
-      selection,
-    };
+    const list = selection.websiteId
+      ? await listArticles(db, {
+          clientId: selection.clientId ?? undefined,
+          websiteId: selection.websiteId,
+          status,
+          authorUserId: params.author && UUID.test(params.author) ? params.author : undefined,
+          query: params.q,
+          sort,
+          page,
+        })
+      : null;
+    return { list, websites, clients, staff: await listActiveStaff(db), selection };
   });
-  const canCreate = data.clients.some((client) => canEditClient(access, client.id)) || data.websites.some((site) => canEditClient(access, site.client_id));
+  const website = data.websites.find((site) => site.id === data.selection.websiteId);
+  const canCreate = Boolean(website && canEditClient(access, website.client_id));
+  const base = { client: data.selection.clientId ?? undefined, website: data.selection.websiteId ?? undefined, author: params.author, q: params.q, sort: sort === "published" ? "published" : undefined };
+  const newHref = website ? `/blog/new?client=${website.client_id}&website=${website.id}` : "/blog";
   const clientsById = new Map(data.clients.map((client) => [client.id, client.name]));
   for (const site of data.websites) clientsById.set(site.client_id, site.client_name);
-  const clientOptions = [...clientsById.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  const filtered = Boolean(params.q || params.author || status);
+  const publicBlog = website?.url ? `${website.url.replace(/\/$/, "")}/blog` : null;
+
   return (
     <>
-      <PageHeader title="Blog" description="Draft, review and publish articles for native clinic websites. Wix Blog publishing is not available. Article performance is not part of this version." action={canCreate ? <LinkButton href={data.selection.clientId ? `/blog/new?client=${data.selection.clientId}` : "/blog/new"}>New article</LinkButton> : undefined} />
+      <PageHeader title="Blog" description="Draft, review and publish articles for native clinic websites. Article performance is not part of this version." action={canCreate ? <LinkButton href={newHref}>+ New article</LinkButton> : undefined} />
       {data.selection.denied && <div className="mb-4"><Notice tone="neutral">That client is not available.</Notice></div>}
       {data.selection.websiteReplaced && <div className="mb-4"><Notice tone="neutral">That website is not part of the selected client.</Notice></div>}
-      <FilterBar clearHref="/blog">
-        <FilterSelect name="client" label="Client" value={data.selection.clientId ?? undefined} allLabel="All clients" options={clientOptions} />
-        <FilterSelect name="website" label="Website" value={data.selection.websiteId ?? undefined} allLabel="All websites" options={data.websites.filter((site) => !data.selection.clientId || site.client_id === data.selection.clientId).map((site) => ({ value: site.id, label: `${site.client_name} — ${site.name}` }))} />
-        <FilterSelect name="status" label="Status" value={params.status} allLabel="All statuses" options={BLOG_STATUSES.map((item) => ({ value: item, label: STATUS_LABEL[item] }))} />
+      <FilterBar clearHref={queryHref({ client: base.client, website: base.website })}>
+        {status && <input type="hidden" name="status" value={status} />}
+        <FilterSelect name="client" label="Client" value={data.selection.clientId ?? undefined} allLabel="Choose a client" options={[...clientsById.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))} />
+        <FilterSelect name="website" label="Website" value={data.selection.websiteId ?? undefined} allLabel="Choose a website" options={data.websites.filter((site) => !data.selection.clientId || site.client_id === data.selection.clientId).map((site) => ({ value: site.id, label: site.name }))} />
         <FilterSelect name="author" label="Author" value={params.author} allLabel="All authors" options={data.staff.map((person) => ({ value: person.id, label: person.display_name }))} />
-        <FilterSelect name="reviewer" label="Reviewer" value={params.reviewer} allLabel="All reviewers" options={data.staff.filter((person) => person.platform_role === "admin" || person.platform_role === "manager" || person.platform_role === "reviewer").map((person) => ({ value: person.id, label: person.display_name }))} />
-        <FilterInput name="category" label="Category" value={params.category} />
-        <FilterInput name="q" label="Search" value={params.q} placeholder="Title or slug" />
+        <FilterSelect name="sort" label="Sort" value={sort} allLabel="Last updated" options={[{ value: "updated", label: "Last updated" }, { value: "published", label: "Published on" }]} />
+        <FilterInput name="q" label="Search title" value={params.q} placeholder="Article title" />
       </FilterBar>
-      {data.articles.length === 0 ? (
-        <EmptyState title="No articles" action={canCreate ? <LinkButton href="/blog/new">New article</LinkButton> : undefined}>Articles for the websites you can access will appear here.</EmptyState>
-      ) : (
-        <Card>
-          <Table caption="Articles">
-            <thead>
-              <tr>
-                <Th>Title</Th>
-                <Th>Client</Th>
-                <Th>Website</Th>
-                <Th>Category</Th>
-                <Th>Author</Th>
-                <Th>Reviewer</Th>
-                <Th>Status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.articles.map((article) => (
-                <tr key={article.id}>
-                  <Td><Link href={`/blog/${article.id}`} className="font-medium text-action hover:underline">{article.title}</Link></Td>
-                  <Td>{article.client_name}</Td>
-                  <Td>{article.website_name}</Td>
-                  <Td>{article.category}</Td>
-                  <Td>{article.author_name}</Td>
-                  <Td>{article.reviewer_name ?? "—"}</Td>
-                  <Td>
-                    <Badge tone={STATUS_TONE[article.status]}>{STATUS_LABEL[article.status]}</Badge>
-                    {article.live_version_id && article.status !== "published" && <Badge tone="good" className="ml-2">On website</Badge>}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
+      {!website && <EmptyState title="Select a client and website">Articles are listed for one website. Choose both above before creating an article.</EmptyState>}
+      {website && (
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted">{website.client_name} · {website.name}</p>
+            {publicBlog && <a href={publicBlog} className="text-sm text-action underline" target="_blank" rel="noreferrer">Public blog</a>}
+          </div>
+          <nav aria-label="Article status" className="mb-4 flex max-w-full gap-2 overflow-x-auto">
+            {FILTERS.map((item) => {
+              const count = data.list?.counts[item] ?? 0;
+              const active = item === "all" ? !status : status === item;
+              const label = item === "all" ? "All" : STATUS_LABEL[item];
+              return (
+                <Link key={item} href={queryHref({ ...base, status: item === "all" ? undefined : item })} aria-current={active ? "page" : undefined} className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm ${active ? "bg-action text-white" : "border border-line"}`}>
+                  {label} <span>{count}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          {data.list && data.list.total === 0 && !filtered && <EmptyState title="No articles yet" action={canCreate ? <LinkButton href={newHref}>Create first article</LinkButton> : undefined}>Articles you create for this website will appear here.</EmptyState>}
+          {data.list && data.list.total === 0 && filtered && <EmptyState title="No articles found" action={<LinkButton href={queryHref({ client: base.client, website: base.website })} variant="secondary">Clear filters</LinkButton>}>Try another title, author or status.</EmptyState>}
+          {data.list && data.list.articles.length > 0 && (
+            <Card>
+              <Table caption="Articles">
+                <thead>
+                  <tr>
+                    <Th>Article</Th>
+                    <Th>Client</Th>
+                    <Th>Status</Th>
+                    <Th>Author</Th>
+                    <Th>Last updated</Th>
+                    <Th>Published on</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.list.articles.map((article) => (
+                    <tr key={article.id}>
+                      <Td>
+                        <Link href={`/blog/${article.id}`} className="font-medium text-action hover:underline">{article.title.trim() || "Untitled article"}</Link>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {article.current_version_id && <Link href={`/blog/${article.id}/preview?version=${article.current_version_id}`} className="text-xs text-action underline">Preview</Link>}
+                          {article.status === "published" && publicBlog && article.live_slug && <a href={`${publicBlog}/${article.live_slug}`} className="text-xs text-action underline" target="_blank" rel="noreferrer">View live</a>}
+                        </div>
+                      </Td>
+                      <Td>{article.client_name}</Td>
+                      <Td>
+                        <Badge tone={STATUS_TONE[article.status]}>{STATUS_LABEL[article.status]}</Badge>
+                        {article.revision_indicator && <Badge tone="info" className="ml-2">{REVISION_LABEL[article.revision_indicator]}</Badge>}
+                      </Td>
+                      <Td>{article.author_name ?? "—"}</Td>
+                      <Td>{stamp(article.updated_at)}</Td>
+                      <Td>{stamp(article.first_published_at, false)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+                <p>Showing {(data.list.page - 1) * data.list.pageSize + 1}–{Math.min(data.list.page * data.list.pageSize, data.list.total)} of {data.list.total}</p>
+                <div className="flex gap-2">
+                  {data.list.page > 1 && <Link href={queryHref({ ...base, status, page: String(data.list.page - 1) })} className="text-action underline">Previous</Link>}
+                  {data.list.page * data.list.pageSize < data.list.total && <Link href={queryHref({ ...base, status, page: String(data.list.page + 1) })} className="text-action underline">Next</Link>}
+                </div>
+              </div>
+            </Card>
+          )}
+        </>
       )}
     </>
   );

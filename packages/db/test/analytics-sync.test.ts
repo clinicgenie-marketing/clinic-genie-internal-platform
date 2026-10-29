@@ -203,13 +203,23 @@ describe("analytics tenant isolation and sync", () => {
         clientId, websiteId: site, provider: "wix", externalPropertyId: "instance-a", streamOrSiteRef: "instance-a",
         providerTimezone: "Asia/Singapore", tokenCiphertext: first.ciphertext, tokenNonce: first.nonce, actorUserId: admin.id,
       });
+      await setSourcePolicy(db, { clientId, websiteId: site, reportFamily: "traffic", connectionId: left.id, effectiveFrom: "2026-10-01", actorUserId: admin.id });
       await disconnectConnection(db, { connectionId: left.id, actorUserId: admin.id });
       const right = await saveConnection(db, {
         clientId, websiteId: site, provider: "wix", externalPropertyId: "instance-a", streamOrSiteRef: "instance-a",
         providerTimezone: "Asia/Singapore", tokenCiphertext: second.ciphertext, tokenNonce: second.nonce, actorUserId: admin.id,
       });
       await setSourcePolicy(db, { clientId, websiteId: site, reportFamily: "traffic", connectionId: right.id, effectiveFrom: "2026-10-01", actorUserId: admin.id });
-      await expect(setSourcePolicy(db, { clientId, websiteId: site, reportFamily: "traffic", connectionId: right.id, effectiveFrom: "2026-10-01", actorUserId: admin.id })).rejects.toThrow(/overlap/);
+      const open = await db.query<{ connection_id: string }>(
+        "select connection_id from analytics_source_policies where website_id = $1 and report_family = 'traffic' and effective_to is null",
+        [site],
+      );
+      expect(open.rows.map((row) => row.connection_id)).toEqual([right.id]);
+      await expect(db.query(
+        `insert into analytics_source_policies (client_id, website_id, report_family, connection_id, effective_from, changed_by)
+         values ($1, $2, 'traffic', $3, '2026-10-01', $4)`,
+        [clientId, site, left.id, admin.id],
+      )).rejects.toThrow(/overlap/);
     });
   });
 });

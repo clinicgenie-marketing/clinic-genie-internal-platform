@@ -20,10 +20,10 @@ export function periodRange(id: PeriodRangeId, today = todaySgt()): { current: P
   return withPrevious(span.start, span.end);
 }
 
-/** A chosen calendar range. Rejects inverted dates, future ends, and spans longer than a year. */
+/** A chosen calendar range. Rejects inverted dates, future ends, and spans longer than two years. */
 export function customWindow(from?: string, to?: string, today = todaySgt()): { current: PeriodWindow; previous: PeriodWindow } | null {
   if (!from || !to || !isValidDate(from) || !isValidDate(to) || to < from || to > today) return null;
-  if (isoDaysBetween(from, to) + 1 > 366) return null;
+  if (isoDaysBetween(from, to) + 1 > 731) return null;
   return withPrevious(from, to);
 }
 
